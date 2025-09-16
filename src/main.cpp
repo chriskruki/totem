@@ -169,6 +169,50 @@ void handleSerialCommands()
     {
       printSystemInfo();
     }
+    else if (command.startsWith("mode "))
+    {
+      int mode = command.substring(5).toInt();
+      ledDriver.setMode(mode);
+    }
+    else if (command == "mode")
+    {
+      Serial.print("Current mode: ");
+      Serial.println(ledDriver.getCurrentMode());
+    }
+    else if (command == "color")
+    {
+      uint8_t r, g, b;
+      ledDriver.getCurrentColor(r, g, b);
+      Serial.print("Current color: RGB(");
+      Serial.print(r);
+      Serial.print(", ");
+      Serial.print(g);
+      Serial.print(", ");
+      Serial.print(b);
+      Serial.println(")");
+    }
+    else if (command == "calibrate")
+    {
+      Serial.println("=== ENTERING CALIBRATION MODE ===");
+      ledDriver.setMode(MODE_CALIBRATION); // Force calibration mode
+      Serial.println("Move joystick to all extremes.");
+      Serial.println("Press joystick button to save, or wait 10s to auto-save.");
+      Serial.println("LEDs will blink rapidly during calibration.");
+    }
+    else if (command == "bounds")
+    {
+      int xMin, xMax, yMin, yMax;
+      ledDriver.getCalibrationBounds(xMin, xMax, yMin, yMax);
+      Serial.println("=== Joystick Calibration Bounds ===");
+      Serial.print("X: ");
+      Serial.print(xMin);
+      Serial.print(" to ");
+      Serial.println(xMax);
+      Serial.print("Y: ");
+      Serial.print(yMin);
+      Serial.print(" to ");
+      Serial.println(yMax);
+    }
     else
     {
       Serial.println("Unknown command. Type 'help' for available commands.");
@@ -192,6 +236,23 @@ void printHelp()
   Serial.println("brightness X - Set brightness (0-255)");
   Serial.println("demo         - Cycle through demo colors");
   Serial.println("info         - Show system information");
+  Serial.println("mode         - Show current joystick mode");
+  Serial.println("mode X       - Set joystick mode (0=Config, 1=Color, 2=Blink, 3=Pointer)");
+  Serial.println("color        - Show current RGB color values");
+  Serial.println("calibrate    - Enter joystick calibration mode");
+  Serial.println("bounds       - Show current calibration bounds");
+  Serial.println("");
+  Serial.println("=== Joystick Modes ===");
+  Serial.println("Mode 0: Config   - Y-axis controls brightness");
+  Serial.println("Mode 1: Color    - X/Y-axis controls RGB color wheel");
+  Serial.println("Mode 2: Blink    - White blink placeholder");
+  Serial.println("Mode 3: Pointer  - Joystick direction lights up 3 LEDs in circle");
+  Serial.println("Button press toggles between modes");
+  Serial.println("");
+  Serial.println("=== Calibration ===");
+  Serial.println("Method 1: Type 'calibrate' command");
+  Serial.println("Method 2: Double-click joystick button");
+  Serial.println("Move joystick to all extremes, then press button to save");
   Serial.println("========================\n");
 }
 

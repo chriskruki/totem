@@ -18,14 +18,52 @@ private:
   unsigned long lastUpdate; // Last update timestamp
   bool needsUpdate;         // Flag to indicate if display needs refresh
 
-  // Joystick state (for future implementation)
+  // Current mode
+  uint8_t currentMode;
+
+  // Color state for mode 2 (color wheel)
+  uint8_t currentR, currentG, currentB;
+
+  // Blink state for mode 3
+  bool blinkState;
+  unsigned long lastBlinkTime;
+
+  // Calibration state
+  bool inCalibrationMode;
+  unsigned long calibrationStartTime;
+  unsigned long lastCalibrationBlink;
+  bool calibrationBlinkState;
+  int xMin, xMax, yMin, yMax; // Calibrated joystick bounds
+
+  // Triple-click detection
+  int clickCount;
+  unsigned long lastClickTime;
+  unsigned long firstClickTime;
+
+  // Joystick state
   struct JoystickState
   {
     int x;
     int y;
     bool buttonPressed;
+    bool lastButtonState;
+    unsigned long lastButtonChange;
     unsigned long lastRead;
   } joystickState;
+
+  // Private mode processing methods
+  void processBrightnessMode();
+  void processColorWheelMode();
+  void processBlinkMode();
+  void processPointerMode();
+  void processCalibrationMode();
+
+  // Calibration helper methods
+  void startCalibrationMode();
+  void exitCalibrationMode();
+  bool detectDoubleClick(bool buttonPressed, unsigned long currentTime);
+  void saveCalibration();
+  void loadCalibration();
 
 public:
   /**
@@ -112,6 +150,41 @@ public:
    * @return Total number of LEDs
    */
   int getNumLEDs() const { return NUM_LEDS; }
+
+  /**
+   * @brief Get current mode
+   * @return Current mode (0=Config, 1=Color, 2=Blink)
+   */
+  uint8_t getCurrentMode() const { return currentMode; }
+
+  /**
+   * @brief Set mode manually (for testing)
+   * @param mode Mode to set (0=Config, 1=Color, 2=Blink)
+   */
+  void setMode(uint8_t mode);
+
+  /**
+   * @brief Get current RGB color values
+   * @param r Reference to red value
+   * @param g Reference to green value
+   * @param b Reference to blue value
+   */
+  void getCurrentColor(uint8_t &r, uint8_t &g, uint8_t &b) const;
+
+  /**
+   * @brief Check if in calibration mode
+   * @return True if currently calibrating
+   */
+  bool isInCalibrationMode() const { return inCalibrationMode; }
+
+  /**
+   * @brief Get calibration bounds
+   * @param xMin Reference to X minimum value
+   * @param xMax Reference to X maximum value
+   * @param yMin Reference to Y minimum value
+   * @param yMax Reference to Y maximum value
+   */
+  void getCalibrationBounds(int &xMin, int &xMax, int &yMin, int &yMax) const;
 };
 
 #endif // LED_DRIVER_H
