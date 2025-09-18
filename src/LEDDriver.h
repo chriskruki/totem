@@ -58,12 +58,22 @@ private:
   void processPointerMode();
   void processCalibrationMode();
 
+  // Pointer helper methods
+  void createPointer(int centerLED, int width);
+
   // Calibration helper methods
   void startCalibrationMode();
   void exitCalibrationMode();
   bool detectDoubleClick(bool buttonPressed, unsigned long currentTime);
   void saveCalibration();
   void loadCalibration();
+
+  // Power management helper methods
+  float calculateCurrentDraw();
+  float calculatePowerConsumption();
+  uint8_t calculateSafeBrightness();
+  bool isPowerLimitExceeded();
+  void applyPowerLimiting();
 
 public:
   /**
@@ -97,6 +107,28 @@ public:
   void setSolidColor(CRGB color);
 
   /**
+   * @brief Set all LEDs to a solid color with brightness
+   * @param r Red component (0-255)
+   * @param g Green component (0-255)
+   * @param b Blue component (0-255)
+   * @param brightness Brightness level (0-255)
+   */
+  void setSolidColor(uint8_t r, uint8_t g, uint8_t b, uint8_t brightness);
+
+  /**
+   * @brief Set all LEDs to a solid color with brightness using CRGB
+   * @param color CRGB color object
+   * @param brightness Brightness level (0-255)
+   */
+  void setSolidColor(CRGB color, uint8_t brightness);
+
+  /**
+   * @brief Set all LEDs to a HTML Color name
+   * @param colorName HTML color name
+   */
+  void setSolidColor(CRGB::HTMLColorCode colorName);
+
+  /**
    * @brief Set individual LED color
    * @param index LED index (0 to NUM_LEDS-1)
    * @param r Red component (0-255)
@@ -111,6 +143,24 @@ public:
    * @param color CRGB color object
    */
   void setLED(int index, CRGB color);
+
+  /**
+   * @brief Set individual LED color with brightness
+   * @param index LED index (0 to NUM_LEDS-1)
+   * @param r Red component (0-255)
+   * @param g Green component (0-255)
+   * @param b Blue component (0-255)
+   * @param brightness Brightness level (0-255)
+   */
+  void setLED(int index, uint8_t r, uint8_t g, uint8_t b, uint8_t brightness);
+
+  /**
+   * @brief Set individual LED color with brightness using CRGB
+   * @param index LED index (0 to NUM_LEDS-1)
+   * @param color CRGB color object
+   * @param brightness Brightness level (0-255)
+   */
+  void setLED(int index, CRGB color, uint8_t brightness);
 
   /**
    * @brief Clear all LEDs (turn them off)
@@ -185,6 +235,24 @@ public:
    * @param yMax Reference to Y maximum value
    */
   void getCalibrationBounds(int &xMin, int &xMax, int &yMin, int &yMax) const;
+
+  /**
+   * @brief Get current power consumption estimate
+   * @return Current power consumption in watts
+   */
+  float getCurrentPowerConsumption();
+
+  /**
+   * @brief Get current estimated current draw
+   * @return Current draw in milliamps
+   */
+  float getCurrentDraw();
+
+  /**
+   * @brief Check if power limiting is active
+   * @return True if power limiting is reducing brightness
+   */
+  bool isPowerLimited();
 };
 
 #endif // LED_DRIVER_H
