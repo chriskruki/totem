@@ -266,6 +266,9 @@ String WiFiManager::generateStatusHTML()
   case MODE_BLINK:
     modeName = "Blink Mode";
     break;
+  case MODE_PATTERN:
+    modeName = "Pattern Mode";
+    break;
   case MODE_POINTER:
     modeName = "Pointer Mode";
     break;
@@ -289,6 +292,33 @@ String WiFiManager::generateStatusHTML()
   html += "<h2>Brightness</h2>\n";
   html += "<p>" + String(ledDriver->getBrightness()) + " / 255</p>\n";
   html += "</div>\n";
+
+  // Pattern Information (only show in pattern mode)
+  if (mode == MODE_PATTERN)
+  {
+    html += "<div>\n";
+    html += "<h2>Pattern Information</h2>\n";
+    PatternManager &patternManager = ledDriver->getPatternManager();
+    Pattern *currentPattern = patternManager.getCurrentPattern();
+    ColorPalette *currentPalette = patternManager.getPaletteManager().getCurrentPalette();
+
+    if (currentPattern)
+    {
+      html += "<p>Current Pattern: " + currentPattern->getName() + "</p>\n";
+      html += "<p>Description: " + currentPattern->getDescription() + "</p>\n";
+      html += "<p>Pattern " + String(patternManager.getCurrentPatternIndex() + 1) + " of " + String(patternManager.getPatternCount()) + "</p>\n";
+    }
+
+    if (currentPalette)
+    {
+      html += "<p>Current Palette: " + currentPalette->getName() + "</p>\n";
+      html += "<p>Palette " + String(patternManager.getPaletteManager().getCurrentPaletteIndex() + 1) + " of " + String(patternManager.getPaletteManager().getPaletteCount()) + "</p>\n";
+    }
+
+    html += "<p>Global Speed: " + String(patternManager.getGlobalSpeed(), 1) + "x</p>\n";
+    html += "<p>Auto Switch: " + String(patternManager.getAutoSwitch() ? "ON" : "OFF") + "</p>\n";
+    html += "</div>\n";
+  }
 
   // Power Information
   html += "<div>\n";
@@ -370,6 +400,9 @@ String WiFiManager::generateStatusJSON()
   case MODE_BLINK:
     modeName = "Blink";
     break;
+  case MODE_PATTERN:
+    modeName = "Pattern";
+    break;
   case MODE_POINTER:
     modeName = "Pointer";
     break;
@@ -390,6 +423,51 @@ String WiFiManager::generateStatusJSON()
 
   // Brightness
   json += "  \"brightness\": " + String(ledDriver->getBrightness()) + ",\n";
+
+  // Pattern information (only include in pattern mode)
+  if (mode == MODE_PATTERN)
+  {
+    json += "  \"pattern\": {\n";
+    PatternManager &patternManager = ledDriver->getPatternManager();
+    Pattern *currentPattern = patternManager.getCurrentPattern();
+    ColorPalette *currentPalette = patternManager.getPaletteManager().getCurrentPalette();
+
+    if (currentPattern)
+    {
+      json += "    \"name\": \"" + currentPattern->getName() + "\",\n";
+      json += "    \"description\": \"" + currentPattern->getDescription() + "\",\n";
+      json += "    \"index\": " + String(patternManager.getCurrentPatternIndex()) + ",\n";
+      json += "    \"total\": " + String(patternManager.getPatternCount()) + ",\n";
+    }
+    else
+    {
+      json += "    \"name\": null,\n";
+      json += "    \"description\": null,\n";
+      json += "    \"index\": -1,\n";
+      json += "    \"total\": 0,\n";
+    }
+
+    if (currentPalette)
+    {
+      json += "    \"palette\": {\n";
+      json += "      \"name\": \"" + currentPalette->getName() + "\",\n";
+      json += "      \"index\": " + String(patternManager.getPaletteManager().getCurrentPaletteIndex()) + ",\n";
+      json += "      \"total\": " + String(patternManager.getPaletteManager().getPaletteCount()) + "\n";
+      json += "    },\n";
+    }
+    else
+    {
+      json += "    \"palette\": null,\n";
+    }
+
+    json += "    \"speed\": " + String(patternManager.getGlobalSpeed(), 2) + ",\n";
+    json += "    \"autoSwitch\": " + String(patternManager.getAutoSwitch() ? "true" : "false") + "\n";
+    json += "  },\n";
+  }
+  else
+  {
+    json += "  \"pattern\": null,\n";
+  }
 
   // Power information
   if (ENABLE_POWER_LIMITING)

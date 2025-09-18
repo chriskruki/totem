@@ -10,6 +10,7 @@ LEDDriver::LEDDriver() : brightness(DEFAULT_BRIGHTNESS),
                          currentB(STATIC_COLOR_B),
                          blinkState(false),
                          lastBlinkTime(0),
+                         patternManager(nullptr),
                          inCalibrationMode(false),
                          calibrationStartTime(0),
                          lastCalibrationBlink(0),
@@ -29,6 +30,12 @@ LEDDriver::LEDDriver() : brightness(DEFAULT_BRIGHTNESS),
   joystickState.lastButtonState = false;
   joystickState.lastButtonChange = 0;
   joystickState.lastRead = 0;
+}
+
+LEDDriver::~LEDDriver()
+{
+  // Clean up pattern manager
+  delete patternManager;
 }
 
 bool LEDDriver::initialize()
@@ -57,6 +64,10 @@ bool LEDDriver::initialize()
 
   // Initialize joystick pins (for future use)
   pinMode(JOYSTICK_BUTTON_PIN, INPUT_PULLUP);
+
+  // Initialize pattern manager
+  patternManager = new PatternManager(leds, NUM_LEDS);
+  patternManager->initialize();
 
   Serial.print("LED Driver initialized with ");
   Serial.print(NUM_LEDS);
@@ -218,6 +229,9 @@ void LEDDriver::readJoystick()
           case MODE_BLINK:
             Serial.println("Blink Mode");
             break;
+          case MODE_PATTERN:
+            Serial.println("Pattern Mode");
+            break;
           }
         }
       }
@@ -254,8 +268,13 @@ void LEDDriver::processJoystickInput()
     processBlinkMode();
     break;
 
+  case MODE_PATTERN:
+    // Mode 4: Pattern mode
+    processPatternMode();
+    break;
+
   case MODE_POINTER:
-    // Mode 4: Circular pointer mode
+    // Mode 5: Circular pointer mode
     processPointerMode();
     break;
   }
@@ -388,6 +407,85 @@ void LEDDriver::processBlinkMode()
       // Serial.println("Blink: OFF");
     }
     show();
+  }
+}
+
+void LEDDriver::processPatternMode()
+{
+  // Mode 4: Pattern mode using PatternManager
+  unsigned long currentTime = millis();
+
+  if (patternManager)
+  {
+    // Handle joystick input for pattern control
+    int xDiff = joystickState.x - JOYSTICK_CENTER;
+    int yDiff = joystickState.y - JOYSTICK_CENTER;
+
+    // Use joystick X-axis to cycle patterns
+    static int lastPatternChange = 0;
+    static unsigned long lastPatternChangeTime = 0;
+    const unsigned long PATTERN_CHANGE_INTERVAL = 300; // Minimum time between pattern changes
+
+    if (abs(xDiff) > JOYSTICK_DEADZONE &&
+        (currentTime - lastPatternChangeTime) > PATTERN_CHANGE_INTERVAL)
+    {
+      if (xDiff > 0 && lastPatternChange <= 0) // Right - next pattern
+      {
+        patternManager->nextPattern(false);
+        Serial.print("Next pattern: ");
+        Serial.println(patternManager->getCurrentPattern()->getName());
+        lastPatternChange = 1;
+        lastPatternChangeTime = currentTime;
+      }
+      else if (xDiff < 0 && lastPatternChange >= 0) // Left - previous pattern
+      {
+        patternManager->previousPattern(false);
+        Serial.print("Previous pattern: ");
+        Serial.println(patternManager->getCurrentPattern()->getName());
+        lastPatternChange = -1;
+        lastPatternChangeTime = currentTime;
+      }
+    }
+    else if (abs(xDiff) <= JOYSTICK_DEADZONE)
+    {
+      lastPatternChange = 0; // Reset when joystick returns to center
+    }
+
+    // Use joystick Y-axis to cycle color palettes
+    static int lastPaletteChange = 0;
+    static unsigned long lastPaletteChangeTime = 0;
+    const unsigned long PALETTE_CHANGE_INTERVAL = 300;
+
+    if (abs(yDiff) > JOYSTICK_DEADZONE &&
+        (currentTime - lastPaletteChangeTime) > PALETTE_CHANGE_INTERVAL)
+    {
+      if (yDiff > 0 && lastPaletteChange <= 0) // Up - next palette
+      {
+        patternManager->nextPalette();
+        Serial.print("Next palette: ");
+        Serial.println(patternManager->getPaletteManager().getCurrentPalette()->getName());
+        lastPaletteChange = 1;
+        lastPaletteChangeTime = currentTime;
+      }
+      else if (yDiff < 0 && lastPaletteChange >= 0) // Down - previous palette
+      {
+        patternManager->previousPalette();
+        Serial.print("Previous palette: ");
+        Serial.println(patternManager->getPaletteManager().getCurrentPalette()->getName());
+        lastPaletteChange = -1;
+        lastPaletteChangeTime = currentTime;
+      }
+    }
+    else if (abs(yDiff) <= JOYSTICK_DEADZONE)
+    {
+      lastPaletteChange = 0; // Reset when joystick returns to center
+    }
+
+    // Update pattern manager - this will update the LEDs
+    if (patternManager->update(currentTime))
+    {
+      show(); // Show updated LEDs
+    }
   }
 }
 
@@ -933,4 +1031,19 @@ bool LEDDriver::isPowerLimited()
 
   uint8_t safeBrightness = calculateSafeBrightness();
   return safeBrightness < brightness;
+}
+
+// Pattern management methods
+PatternManager &LEDDriver::getPatternManager()
+{
+  return *patternManager;
+}
+
+bool LEDDriver::handlePatternCommand(const String &command)
+{
+  if (patternManager)
+  {
+    return patternManager->handleSerialCommand(command);
+  }
+  return false;
 }

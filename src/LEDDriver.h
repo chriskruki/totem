@@ -3,6 +3,7 @@
 
 #include <FastLED.h>
 #include "config.h"
+#include "PatternManager.h"
 
 /**
  * @brief Custom LED Driver class for ESP32 with FastLED
@@ -27,6 +28,9 @@ private:
   // Blink state for mode 3
   bool blinkState;
   unsigned long lastBlinkTime;
+
+  // Pattern manager for advanced patterns
+  PatternManager *patternManager;
 
   // Calibration state
   bool inCalibrationMode;
@@ -55,6 +59,7 @@ private:
   void processBrightnessMode();
   void processColorWheelMode();
   void processBlinkMode();
+  void processPatternMode();
   void processPointerMode();
   void processCalibrationMode();
 
@@ -80,6 +85,11 @@ public:
    * @brief Constructor for LEDDriver
    */
   LEDDriver();
+
+  /**
+   * @brief Destructor for LEDDriver
+   */
+  ~LEDDriver();
 
   /**
    * @brief Initialize the LED driver and FastLED library
@@ -253,6 +263,19 @@ public:
    * @return True if power limiting is reducing brightness
    */
   bool isPowerLimited();
+
+  /**
+   * @brief Get pattern manager reference
+   * @return Reference to PatternManager
+   */
+  PatternManager &getPatternManager();
+
+  /**
+   * @brief Handle pattern-related serial commands
+   * @param command Command string
+   * @return true if command was handled
+   */
+  bool handlePatternCommand(const String &command);
 };
 
 #endif // LED_DRIVER_H

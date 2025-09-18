@@ -12,7 +12,7 @@
 #define MAX_BRIGHTNESS 255
 
 // Power Management and Safety Limits
-#define MAX_CURRENT_MA 2000        // Maximum allowed current draw in milliamps (5A)
+#define MAX_CURRENT_MA 400        // Maximum allowed current draw in milliamps
 #define LED_CURRENT_MA_PER_LED 60  // Max current per WS2812B LED at full white (mA)
 #define SAFETY_MARGIN_PERCENT 80   // Use only 80% of max current for safety
 #define VOLTAGE_5V 5.0             // Operating voltage for LED strip
@@ -57,9 +57,10 @@
 #define MODE_CONFIG 0      // Brightness control mode
 #define MODE_COLOR 1       // RGB color wheel mode
 #define MODE_BLINK 2       // White blink placeholder mode
-#define MODE_POINTER 3     // Circular pointer mode
-#define MODE_CALIBRATION 4 // Joystick calibration mode
-#define NUM_MODES 3        // Total number of normal modes for single-click cycling (Config, Color, Blink)
+#define MODE_PATTERN 3     // Pattern mode (new)
+#define MODE_POINTER 4     // Circular pointer mode
+#define MODE_CALIBRATION 5 // Joystick calibration mode
+#define NUM_MODES 4        // Total number of normal modes for single-click cycling (Config, Color, Blink, Pattern)
 
 // Joystick sensitivity settings
 #define BRIGHTNESS_STEP 5      // How much brightness changes per joystick movement

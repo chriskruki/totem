@@ -105,6 +105,12 @@ void SystemManager::handleSerialCommands()
       return; // Command was handled by WiFi manager
     }
 
+    // Try pattern manager commands first
+    if (ledDriver && ledDriver->handlePatternCommand(command))
+    {
+      return; // Command was handled by pattern manager
+    }
+
     // Handle LED-specific commands
     handleLEDCommands(command);
 
@@ -254,10 +260,12 @@ void SystemManager::handleSystemCommands(const String &command)
   }
   else if (command != "" && !command.startsWith("wifi") &&
            !command.startsWith("brightness") && !command.startsWith("mode") &&
+           !command.startsWith("pattern") && !command.startsWith("palette") &&
+           !command.startsWith("speed") && !command.startsWith("auto") &&
            command != "clear" && command != "static" && command != "red" &&
            command != "green" && command != "blue" && command != "white" &&
            command != "color" && command != "calibrate" && command != "bounds" &&
-           command != "power")
+           command != "power" && command != "status")
   {
     Serial.println("Unknown command. Type 'help' for available commands.");
   }
@@ -277,11 +285,24 @@ void SystemManager::printHelp()
   Serial.println("demo         - Cycle through demo colors");
   Serial.println("info         - Show system information");
   Serial.println("mode         - Show current joystick mode");
-  Serial.println("mode X       - Set joystick mode (0=Config, 1=Color, 2=Blink, 3=Pointer)");
+  Serial.println("mode X       - Set joystick mode (0=Config, 1=Color, 2=Blink, 3=Pattern, 4=Pointer)");
   Serial.println("color        - Show current RGB color values");
   Serial.println("calibrate    - Enter joystick calibration mode");
   Serial.println("bounds       - Show current calibration bounds");
   Serial.println("power        - Show power consumption and safety limits");
+  Serial.println("");
+  Serial.println("=== Pattern Commands ===");
+  Serial.println("pattern list - Show available patterns");
+  Serial.println("pattern X    - Set pattern by number or name (instant switch)");
+  Serial.println("pattern next - Next pattern (instant switch)");
+  Serial.println("pattern prev - Previous pattern (instant switch)");
+  Serial.println("palette list - Show available color palettes");
+  Serial.println("palette X    - Set palette by number or name");
+  Serial.println("palette next - Next palette");
+  Serial.println("palette prev - Previous palette");
+  Serial.println("speed X      - Set pattern speed (0.1-10.0)");
+  Serial.println("auto on/off  - Enable/disable auto pattern switching");
+  Serial.println("status       - Show pattern manager status");
   Serial.println("wifi         - Show WiFi status");
   Serial.println("wifi on      - Enable WiFi Access Point and web server");
   Serial.println("wifi off     - Disable WiFi Access Point and web server");
@@ -290,7 +311,8 @@ void SystemManager::printHelp()
   Serial.println("Mode 0: Config   - Y-axis controls brightness");
   Serial.println("Mode 1: Color    - X/Y-axis controls RGB color wheel");
   Serial.println("Mode 2: Blink    - White blink placeholder");
-  Serial.println("Mode 3: Pointer  - Joystick direction lights up LEDs in circle");
+  Serial.println("Mode 3: Pattern  - X-axis cycles patterns, Y-axis cycles palettes");
+  Serial.println("Mode 4: Pointer  - Joystick direction lights up LEDs in circle");
   Serial.println("Button press toggles between modes");
   Serial.println("");
   Serial.println("=== Calibration ===");
