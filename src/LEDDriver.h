@@ -32,6 +32,38 @@ private:
   // Pattern manager for advanced patterns
   PatternManager *patternManager;
 
+  // Global settings state
+  uint8_t globalBrightness;
+  float globalSpeed;
+  int selectedPatternIndex;
+  int selectedPaletteIndex;
+
+  // Settings mode state
+  enum SettingsPhase
+  {
+    PHASE_1_QUADRANTS,
+    PHASE_2_BRIGHTNESS,
+    PHASE_2_SPEED,
+    PHASE_2_PATTERN,
+    PHASE_2_PALETTE
+  };
+  SettingsPhase settingsPhase;
+  int currentQuadrant;         // Which quadrant is being hovered/selected
+  int previewedItem;           // Which item is being previewed in Phase 2
+  bool itemPreviewed;          // Whether an item is currently being previewed
+  unsigned long holdStartTime; // When user started holding in a quadrant
+  bool isHolding;              // Whether user is currently holding
+  bool flashState;             // For flashing effect during selection
+  unsigned long lastFlashTime; // Last flash update time
+
+  // Sticky pointer state (for settings mode)
+  int stickyPointerPosition; // Last pointer position when joystick was active
+  bool hasStickyPointer;     // Whether sticky pointer should be shown
+
+  // Pointer mode state for Mode 2 (chase pointer)
+  int pointerPosition;
+  unsigned long lastPointerMove;
+
   // Calibration state
   bool inCalibrationMode;
   unsigned long calibrationStartTime;
@@ -56,12 +88,30 @@ private:
   } joystickState;
 
   // Private mode processing methods
-  void processBrightnessMode();
-  void processColorWheelMode();
-  void processBlinkMode();
-  void processPatternMode();
+  void processMainMode();
+  void processSettingsMode();
   void processPointerMode();
+  void processPatternMode();
   void processCalibrationMode();
+
+  // Settings mode helper methods
+  void processSettingsPhase1();
+  void processSettingsPhase2();
+  void renderQuadrantPreviews();
+  void renderBrightnessPhase2();
+  void renderSpeedPhase2();
+  void renderPatternPhase2();
+  void renderPalettePhase2();
+  void renderSelectionTicks(int numItems);
+  void renderQuadrantPointer();
+  void renderPhase2Pointer();
+  int getCurrentSettingPosition(); // Get current setting position for default display
+  int determineQuadrant(int x, int y);
+  int determineClockPosition(int x, int y);
+  void startHolding(int quadrant);
+  void stopHolding();
+  void selectCurrentItem();
+  void applySelectedSetting();
 
   // Pointer helper methods
   void createPointer(int centerLED, int width);
@@ -213,15 +263,39 @@ public:
 
   /**
    * @brief Get current mode
-   * @return Current mode (0=Config, 1=Color, 2=Blink)
+   * @return Current mode (0=Main, 1=Settings, 2=Pointer)
    */
   uint8_t getCurrentMode() const { return currentMode; }
 
   /**
    * @brief Set mode manually (for testing)
-   * @param mode Mode to set (0=Config, 1=Color, 2=Blink)
+   * @param mode Mode to set (0=Main, 1=Settings, 2=Pointer)
    */
   void setMode(uint8_t mode);
+
+  /**
+   * @brief Get global brightness setting
+   * @return Global brightness (1-255)
+   */
+  uint8_t getGlobalBrightness() const { return globalBrightness; }
+
+  /**
+   * @brief Get global speed setting
+   * @return Global speed (0.5-10.0)
+   */
+  float getGlobalSpeed() const { return globalSpeed; }
+
+  /**
+   * @brief Get selected pattern index
+   * @return Pattern index
+   */
+  int getSelectedPatternIndex() const { return selectedPatternIndex; }
+
+  /**
+   * @brief Get selected palette index
+   * @return Palette index
+   */
+  int getSelectedPaletteIndex() const { return selectedPaletteIndex; }
 
   /**
    * @brief Get current RGB color values

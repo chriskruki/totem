@@ -7,7 +7,7 @@
 PatternManager::PatternManager(CRGB *leds, int numLeds)
     : leds(leds), numLeds(numLeds), patternCount(0), currentPatternIndex(0),
       autoSwitch(false), autoSwitchInterval(30000), lastAutoSwitch(0),
-      globalBrightness(255), globalSpeed(1.0f),
+      globalBrightness(255), globalSpeed(DEFAULT_GLOBAL_SPEED),
       inTransition(false), transitionStart(0), transitionDuration(1000),
       fromPatternIndex(0), toPatternIndex(0)
 {
@@ -38,16 +38,10 @@ void PatternManager::initialize()
   // Create and add default patterns
   addPattern(new SolidPattern(leds, numLeds, CRGB::White));
   addPattern(new RainbowPattern(leds, numLeds));
-  addPattern(new ChasePattern(leds, numLeds, CRGB::Red, 5));
+  addPattern(new ChasePattern(leds, numLeds, CRGB::Red, 15));
   addPattern(new PulsePattern(leds, numLeds, CRGB::Blue));
   addPattern(new TwinklePattern(leds, numLeds, 20));
-  addPattern(new FirePattern(leds, numLeds));
-  addPattern(new WavePattern(leds, numLeds, CRGB::Cyan, 15));
-
-  // Add variations with different colors
-  addPattern(new ChasePattern(leds, numLeds, CRGB::Green, 3));
-  addPattern(new PulsePattern(leds, numLeds, CRGB::Purple));
-  addPattern(new WavePattern(leds, numLeds, CRGB::Orange, 10));
+  addPattern(new WavePattern(leds, numLeds, CRGB::Cyan, 10));
 
   // Set initial palette for all patterns
   ColorPalette *defaultPalette = paletteManager.getCurrentPalette();
@@ -281,7 +275,7 @@ void PatternManager::setGlobalBrightness(uint8_t brightness)
 
 void PatternManager::setGlobalSpeed(float speed)
 {
-  globalSpeed = constrain(speed, 0.1f, 10.0f);
+  globalSpeed = constrain(speed, SETTINGS_SPEED_MIN, SETTINGS_SPEED_MAX);
   applyGlobalSettings();
 }
 
@@ -514,7 +508,7 @@ bool PatternManager::handleSerialCommand(const String &command)
   if (command.startsWith("speed "))
   {
     float speed = command.substring(6).toFloat();
-    if (speed >= 0.1f && speed <= 10.0f)
+    if (speed >= SETTINGS_SPEED_MIN && speed <= SETTINGS_SPEED_MAX)
     {
       setGlobalSpeed(speed);
       Serial.print("Set speed to: ");
@@ -522,7 +516,7 @@ bool PatternManager::handleSerialCommand(const String &command)
     }
     else
     {
-      Serial.println("Speed must be between 0.1 and 10.0");
+      Serial.println("Speed must be between " + String(SETTINGS_SPEED_MIN) + " and " + String(SETTINGS_SPEED_MAX));
     }
     return true;
   }

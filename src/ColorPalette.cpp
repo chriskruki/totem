@@ -100,23 +100,22 @@ void PaletteManager::initialize()
 
   // Add predefined FastLED palettes
   addPalette(new ColorPalette(RainbowColors_p, "Rainbow", "Classic rainbow colors"));
-  addPalette(new ColorPalette(RainbowStripeColors_p, "Rainbow Stripes", "Rainbow with black stripes"));
   addPalette(new ColorPalette(OceanColors_p, "Ocean", "Deep blue ocean colors"));
-  addPalette(new ColorPalette(CloudColors_p, "Clouds", "Soft white and blue clouds"));
   addPalette(new ColorPalette(LavaColors_p, "Lava", "Hot lava colors"));
   addPalette(new ColorPalette(ForestColors_p, "Forest", "Green forest colors"));
   addPalette(new ColorPalette(PartyColors_p, "Party", "Bright party colors"));
-  addPalette(new ColorPalette(HeatColors_p, "Heat", "Fire heat colors"));
+  // addPalette(new ColorPalette(RainbowStripeColors_p, "Rainbow Stripes", "Rainbow with black stripes"));
+  // addPalette(new ColorPalette(HeatColors_p, "Heat", "Fire heat colors"));
 
   // Add custom predefined palettes
-  addPalette(new ColorPalette(PredefinedPalettes::WARM_COLORS, 4, "Warm", "Warm sunset colors"));
   addPalette(new ColorPalette(PredefinedPalettes::COOL_COLORS, 4, "Cool", "Cool blue and purple"));
-  addPalette(new ColorPalette(PredefinedPalettes::FIRE_COLORS, 4, "Fire", "Flickering fire"));
-  addPalette(new ColorPalette(PredefinedPalettes::OCEAN_COLORS, 4, "Deep Ocean", "Deep ocean blues"));
-  addPalette(new ColorPalette(PredefinedPalettes::FOREST_COLORS, 4, "Forest Green", "Various greens"));
+  addPalette(new ColorPalette(PredefinedPalettes::WARM_COLORS, 4, "Warm", "Warm sunset colors"));
   addPalette(new ColorPalette(PredefinedPalettes::SUNSET_COLORS, 4, "Sunset", "Beautiful sunset"));
   addPalette(new ColorPalette(PredefinedPalettes::NEON_COLORS, 4, "Neon", "Bright neon colors"));
-  addPalette(new ColorPalette(PredefinedPalettes::PASTEL_COLORS, 4, "Pastel", "Soft pastel colors"));
+  // addPalette(new ColorPalette(PredefinedPalettes::PASTEL_COLORS, 4, "Pastel", "Soft pastel colors"));
+  // addPalette(new ColorPalette(PredefinedPalettes::FIRE_COLORS, 4, "Fire", "Flickering fire"));
+  // addPalette(new ColorPalette(PredefinedPalettes::OCEAN_COLORS, 4, "Deep Ocean", "Deep ocean blues"));
+  // addPalette(new ColorPalette(PredefinedPalettes::FOREST_COLORS, 4, "Forest Green", "Various greens"));
 
   Serial.print("Loaded ");
   Serial.print(paletteCount);

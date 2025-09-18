@@ -8,7 +8,7 @@
 Pattern::Pattern(CRGB *leds, int numLeds, unsigned long updateInterval)
     : leds(leds), numLeds(numLeds), updateInterval(updateInterval),
       lastUpdate(0), isActive(true), currentPalette(nullptr),
-      brightness(255), speed(1.0f)
+      brightness(255), speed(DEFAULT_GLOBAL_SPEED)
 {
 }
 
@@ -37,7 +37,7 @@ void Pattern::setBrightness(uint8_t brightness)
 
 void Pattern::setSpeed(float speed)
 {
-  this->speed = constrain(speed, 0.1f, 10.0f);
+  this->speed = constrain(speed, SETTINGS_SPEED_MIN, SETTINGS_SPEED_MAX);
   // Adjust update interval based on speed
   updateInterval = (unsigned long)(50.0f / speed);
 }

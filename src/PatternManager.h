@@ -3,6 +3,7 @@
 
 #include <Arduino.h>
 #include <FastLED.h>
+#include "config.h"
 #include "Pattern.h"
 #include "ColorPalette.h"
 
