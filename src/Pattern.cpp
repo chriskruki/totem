@@ -69,6 +69,8 @@ bool SolidPattern::update(unsigned long currentTime)
 
   lastUpdate = currentTime;
 
+  lastUpdate = currentTime;
+
   // Get color from palette or use default color
   CRGB scaledColor;
   if (currentPalette)
@@ -466,4 +468,382 @@ void WavePattern::setWaveColor(CRGB color)
 void WavePattern::setWaveLength(uint8_t length)
 {
   waveLength = constrain(length, 4, numLeds);
+}
+
+// ============================================================================
+// Multi-Ring Pattern Implementation
+// ============================================================================
+
+MultiRingPattern::MultiRingPattern(CRGB *leds, int numLeds, SegmentManager *segManager, uint8_t width)
+    : Pattern(leds, numLeds, 50), segmentManager(segManager), currentPosition(0.0f), patternWidth(width)
+{
+}
+
+bool MultiRingPattern::update(unsigned long currentTime)
+{
+  if (!isActive || (currentTime - lastUpdate) < updateInterval)
+  {
+    return false;
+  }
+
+  lastUpdate = currentTime;
+
+  // Clear all LEDs
+  fill_solid(leds, numLeds, CRGB::Black);
+
+  if (!segmentManager || !currentPalette)
+  {
+    return true;
+  }
+
+  // Update position based on speed
+  currentPosition += speed * 0.01f;
+  if (currentPosition >= 1.0f)
+  {
+    currentPosition -= 1.0f;
+  }
+
+  // Sample color from palette
+  CRGB color = currentPalette->getColorSmooth(currentPosition);
+
+  // Apply pattern to all segments at the same relative position
+  for (uint8_t segment = 0; segment < segmentManager->getSegmentCount(); segment++)
+  {
+    segmentManager->setSegmentPositionColor(leds, segment, currentPosition, color, patternWidth);
+  }
+
+  return true;
+}
+
+void MultiRingPattern::setPatternWidth(uint8_t width)
+{
+  patternWidth = constrain(width, 1, 10);
+}
+
+// ============================================================================
+// Spiral Pattern Implementation
+// ============================================================================
+
+SpiralPattern::SpiralPattern(CRGB *leds, int numLeds, SegmentManager *segManager, uint8_t width)
+    : Pattern(leds, numLeds, 80), segmentManager(segManager), spiralPosition(0.0f),
+      spiralWidth(width), expandingOut(true), currentRing(0)
+{
+}
+
+bool SpiralPattern::update(unsigned long currentTime)
+{
+  if (!isActive || (currentTime - lastUpdate) < updateInterval)
+  {
+    return false;
+  }
+
+  lastUpdate = currentTime;
+
+  // Clear all LEDs
+  fill_solid(leds, numLeds, CRGB::Black);
+
+  if (!segmentManager || !currentPalette)
+  {
+    return true;
+  }
+
+  // Update spiral position
+  spiralPosition += speed * 0.02f;
+
+  if (expandingOut)
+  {
+    // Expanding from center outward
+    if (spiralPosition >= 1.0f)
+    {
+      spiralPosition = 0.0f;
+      currentRing++;
+      if (currentRing >= segmentManager->getSegmentCount())
+      {
+        currentRing = 0;
+      }
+    }
+  }
+  else
+  {
+    // Contracting toward center
+    if (spiralPosition >= 1.0f)
+    {
+      spiralPosition = 0.0f;
+      if (currentRing == 0)
+      {
+        currentRing = segmentManager->getSegmentCount() - 1;
+      }
+      else
+      {
+        currentRing--;
+      }
+    }
+  }
+
+  // Sample color from palette based on ring
+  float colorPosition = (float)currentRing / (float)segmentManager->getSegmentCount();
+  CRGB color = currentPalette->getColorSmooth(colorPosition);
+
+  // Draw spiral effect - light up current ring and fade previous rings
+  for (uint8_t ring = 0; ring <= currentRing; ring++)
+  {
+    uint8_t fade = 255 - (currentRing - ring) * 60;
+    CRGB fadedColor = color;
+    fadedColor.nscale8(fade);
+
+    float ringPosition = spiralPosition;
+    if (ring < currentRing)
+    {
+      ringPosition = 1.0f; // Previous rings are fully lit
+    }
+
+    segmentManager->setSegmentPositionColor(leds, ring, ringPosition, fadedColor, spiralWidth);
+  }
+
+  return true;
+}
+
+void SpiralPattern::setSpiralWidth(uint8_t width)
+{
+  spiralWidth = constrain(width, 1, 8);
+}
+
+// ============================================================================
+// Ripple Pattern Implementation
+// ============================================================================
+
+RipplePattern::RipplePattern(CRGB *leds, int numLeds, SegmentManager *segManager, unsigned long interval)
+    : Pattern(leds, numLeds, 50), segmentManager(segManager), lastRippleTime(0), rippleInterval(interval)
+{
+
+  // Initialize ripples
+  for (uint8_t i = 0; i < MAX_RIPPLES; i++)
+  {
+    ripples[i].radius = 0.0f;
+    ripples[i].intensity = 0;
+    ripples[i].active = false;
+  }
+}
+
+bool RipplePattern::update(unsigned long currentTime)
+{
+  if (!isActive || (currentTime - lastUpdate) < updateInterval)
+  {
+    return false;
+  }
+
+  lastUpdate = currentTime;
+
+  // Clear all LEDs
+  fill_solid(leds, numLeds, CRGB::Black);
+
+  if (!segmentManager || !currentPalette)
+  {
+    return true;
+  }
+
+  // Start new ripple if it's time
+  if (currentTime - lastRippleTime > rippleInterval / speed)
+  {
+    for (uint8_t i = 0; i < MAX_RIPPLES; i++)
+    {
+      if (!ripples[i].active)
+      {
+        ripples[i].radius = 0.0f;
+        ripples[i].intensity = 255;
+        ripples[i].active = true;
+        lastRippleTime = currentTime;
+        break;
+      }
+    }
+  }
+
+  // Update and draw ripples
+  for (uint8_t i = 0; i < MAX_RIPPLES; i++)
+  {
+    if (ripples[i].active)
+    {
+      // Expand ripple
+      ripples[i].radius += speed * 0.05f;
+      ripples[i].intensity = max(0, (int)ripples[i].intensity - (int)(speed * 8));
+
+      // Deactivate if fully faded
+      if (ripples[i].intensity <= 0 || ripples[i].radius > NUM_EYE_RINGS)
+      {
+        ripples[i].active = false;
+        continue;
+      }
+
+      // Draw ripple on appropriate rings
+      uint8_t ringIndex = (uint8_t)ripples[i].radius;
+      if (ringIndex < segmentManager->getSegmentCount())
+      {
+        float colorPos = (float)i / (float)MAX_RIPPLES;
+        CRGB color = currentPalette->getColorSmooth(colorPos);
+        color.nscale8(ripples[i].intensity);
+
+        // Fill the ring with ripple color
+        segmentManager->fillSegment(leds, ringIndex, color);
+      }
+    }
+  }
+
+  return true;
+}
+
+void RipplePattern::setRippleInterval(unsigned long interval)
+{
+  rippleInterval = constrain(interval, 200, 5000);
+}
+
+// ============================================================================
+// Eye Breathing Pattern Implementation
+// ============================================================================
+
+EyeBreathingPattern::EyeBreathingPattern(CRGB *leds, int numLeds, SegmentManager *segManager)
+    : Pattern(leds, numLeds, 30), segmentManager(segManager), breathPhase(0.0f),
+      currentEyeRing(0), breathingIn(true)
+{
+}
+
+bool EyeBreathingPattern::update(unsigned long currentTime)
+{
+  if (!isActive || (currentTime - lastUpdate) < updateInterval)
+  {
+    return false;
+  }
+
+  lastUpdate = currentTime;
+
+  // Clear all LEDs
+  fill_solid(leds, numLeds, CRGB::Black);
+
+  if (!segmentManager || !currentPalette)
+  {
+    return true;
+  }
+
+  // Update breathing phase
+  breathPhase += speed * 0.05f;
+
+  if (breathPhase >= 1.0f)
+  {
+    breathPhase = 0.0f;
+    if (breathingIn)
+    {
+      // Move to next ring
+      currentEyeRing++;
+      if (currentEyeRing >= NUM_EYE_RINGS)
+      {
+        currentEyeRing = NUM_EYE_RINGS - 1;
+        breathingIn = false;
+      }
+    }
+    else
+    {
+      // Move to previous ring
+      if (currentEyeRing == 0)
+      {
+        breathingIn = true;
+      }
+      else
+      {
+        currentEyeRing--;
+      }
+    }
+  }
+
+  // Calculate breathing intensity using sine wave
+  float intensity = (sin(breathPhase * 2 * PI) + 1.0f) / 2.0f;
+  uint8_t brightness = (uint8_t)(intensity * 255);
+
+  // Get color from palette
+  float colorPos = (float)currentEyeRing / (float)NUM_EYE_RINGS;
+  CRGB color = currentPalette->getColorSmooth(colorPos);
+  color.nscale8(brightness);
+
+  // Light up current eye ring and fade adjacent rings
+  for (uint8_t ring = 0; ring < NUM_EYE_RINGS; ring++)
+  {
+    if (ring == currentEyeRing)
+    {
+      segmentManager->fillSegment(leds, ring, color);
+    }
+    else if (abs((int)ring - (int)currentEyeRing) == 1)
+    {
+      CRGB fadedColor = color;
+      fadedColor.nscale8(100); // 40% brightness for adjacent rings
+      segmentManager->fillSegment(leds, ring, fadedColor);
+    }
+  }
+
+  return true;
+}
+
+// ============================================================================
+// Segment Test Pattern Implementation
+// ============================================================================
+
+SegmentTestPattern::SegmentTestPattern(CRGB *leds, int numLeds, SegmentManager *segManager, unsigned long interval)
+    : Pattern(leds, numLeds, 50), segmentManager(segManager), currentSegment(0),
+      lastSegmentChange(0), segmentInterval(interval)
+{
+}
+
+bool SegmentTestPattern::update(unsigned long currentTime)
+{
+  if (!isActive || (currentTime - lastUpdate) < updateInterval)
+  {
+    return false;
+  }
+
+  lastUpdate = currentTime;
+
+  // Clear all LEDs
+  fill_solid(leds, numLeds, CRGB::Black);
+
+  if (!segmentManager)
+  {
+    return true;
+  }
+
+  // Change segment every segmentInterval milliseconds
+  if (currentTime - lastSegmentChange > segmentInterval / speed)
+  {
+    currentSegment++;
+    if (currentSegment >= segmentManager->getSegmentCount())
+    {
+      currentSegment = 0;
+    }
+    lastSegmentChange = currentTime;
+
+#if ENABLE_SEGMENT_DEBUG
+    const char *segmentName = segmentManager->getSegmentName(currentSegment);
+    Serial.print("Testing segment: ");
+    Serial.print(currentSegment);
+    Serial.print(" (");
+    Serial.print(segmentName);
+    Serial.println(")");
+#endif
+  }
+
+  // Light up current segment in a distinctive color
+  CRGB testColors[] = {
+      CRGB::Red,    // EYE_4 - Outermost ring
+      CRGB::Orange, // EYE_3
+      CRGB::Yellow, // EYE_2
+      CRGB::Green,  // EYE_1
+      CRGB::Blue,   // EYE_0 - Center LED
+      CRGB::Purple  // CLOCK - Outer ring
+  };
+
+  CRGB segmentColor = testColors[currentSegment % 6];
+  segmentManager->fillSegment(leds, currentSegment, segmentColor);
+
+  return true;
+}
+
+void SegmentTestPattern::setSegmentInterval(unsigned long interval)
+{
+  segmentInterval = constrain(interval, 500, 10000);
 }

@@ -4,9 +4,11 @@
 #include <Arduino.h>
 #include <FastLED.h>
 #include "config.h"
+#include "SegmentManager.h"
 
 // Forward declarations
 class ColorPalette;
+class SegmentManager;
 
 /**
  * @brief Base class for all LED patterns
@@ -226,6 +228,117 @@ public:
   void setWaveLength(uint8_t length);
   String getName() const override { return "Wave"; }
   String getDescription() const override { return "Sine wave animation"; }
+};
+
+/**
+ * @brief Multi-ring synchronized pattern
+ *
+ * Runs the same pattern across all rings at synchronized positions
+ */
+class MultiRingPattern : public Pattern
+{
+private:
+  SegmentManager *segmentManager;
+  float currentPosition;
+  uint8_t patternWidth;
+
+public:
+  MultiRingPattern(CRGB *leds, int numLeds, SegmentManager *segManager, uint8_t width = 3);
+  bool update(unsigned long currentTime) override;
+  void setPatternWidth(uint8_t width);
+  String getName() const override { return "MultiRing"; }
+  String getDescription() const override { return "Synchronized pattern across all rings"; }
+};
+
+/**
+ * @brief Spiral pattern from center outward
+ *
+ * Creates spiral effects starting from EYE_0 and expanding outward
+ */
+class SpiralPattern : public Pattern
+{
+private:
+  SegmentManager *segmentManager;
+  float spiralPosition;
+  uint8_t spiralWidth;
+  bool expandingOut;
+  uint8_t currentRing;
+
+public:
+  SpiralPattern(CRGB *leds, int numLeds, SegmentManager *segManager, uint8_t width = 2);
+  bool update(unsigned long currentTime) override;
+  void setSpiralWidth(uint8_t width);
+  String getName() const override { return "Spiral"; }
+  String getDescription() const override { return "Spiral effect from center outward"; }
+};
+
+/**
+ * @brief Ripple effect from center
+ *
+ * Creates ripple waves emanating from the center LED
+ */
+class RipplePattern : public Pattern
+{
+private:
+  SegmentManager *segmentManager;
+  struct Ripple
+  {
+    float radius;
+    uint8_t intensity;
+    bool active;
+  };
+  static const uint8_t MAX_RIPPLES = 3;
+  Ripple ripples[MAX_RIPPLES];
+  unsigned long lastRippleTime;
+  unsigned long rippleInterval;
+
+public:
+  RipplePattern(CRGB *leds, int numLeds, SegmentManager *segManager, unsigned long interval = 1000);
+  bool update(unsigned long currentTime) override;
+  void setRippleInterval(unsigned long interval);
+  String getName() const override { return "Ripple"; }
+  String getDescription() const override { return "Ripple waves from center"; }
+};
+
+/**
+ * @brief Eye breathing pattern
+ *
+ * Makes the eye rings pulse/breathe in sequence
+ */
+class EyeBreathingPattern : public Pattern
+{
+private:
+  SegmentManager *segmentManager;
+  float breathPhase;
+  uint8_t currentEyeRing;
+  bool breathingIn;
+
+public:
+  EyeBreathingPattern(CRGB *leds, int numLeds, SegmentManager *segManager);
+  bool update(unsigned long currentTime) override;
+  String getName() const override { return "EyeBreathing"; }
+  String getDescription() const override { return "Eye rings breathing effect"; }
+};
+
+/**
+ * @brief Segment test pattern for debugging LED mapping
+ *
+ * Cycles through each segment individually to verify correct wiring
+ */
+class SegmentTestPattern : public Pattern
+{
+private:
+  SegmentManager *segmentManager;
+  uint8_t currentSegment;
+  unsigned long lastSegmentChange;
+  unsigned long segmentInterval;
+
+public:
+  SegmentTestPattern(CRGB *leds, int numLeds, SegmentManager *segManager, unsigned long interval = SEGMENT_TEST_INTERVAL);
+  bool update(unsigned long currentTime) override;
+  void setSegmentInterval(unsigned long interval);
+  String getName() const override { return "SegmentTest"; }
+  String getDescription() const override { return "Test pattern for segment verification"; }
 };
 
 #endif // PATTERN_H

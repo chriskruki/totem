@@ -82,12 +82,17 @@ bool LEDDriver::initialize()
   pinMode(JOYSTICK_BUTTON_PIN, INPUT_PULLUP);
 
   // Initialize pattern manager
-  patternManager = new PatternManager(leds, NUM_LEDS);
+  patternManager = new PatternManager(leds, NUM_LEDS, &segmentManager);
   patternManager->initialize();
 
   Serial.print("LED Driver initialized with ");
   Serial.print(NUM_LEDS);
   Serial.println(" LEDs");
+
+#if ENABLE_SEGMENT_DEBUG
+  // Print segment configuration for debugging
+  segmentManager.printSegmentInfo();
+#endif
 
   return true;
 }
@@ -1693,4 +1698,9 @@ void LEDDriver::applySelectedSetting()
   hasStickyPointer = false;
 
   Serial.println("Returning to Main Mode");
+}
+
+SegmentManager &LEDDriver::getSegmentManager()
+{
+  return segmentManager;
 }

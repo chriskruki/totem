@@ -2,10 +2,57 @@
 #define CONFIG_H
 
 // LED Configuration
-#define NUM_LEDS 61      // Adjust based on your LED strip length
+#define NUM_LEDS 163     // Total LED count (62 Eye + 101 Clock)
 #define DATA_PIN 13      // GPIO pin connected to LED data line
 #define LED_TYPE WS2812B // Change if using different LED type (APA102, WS2811, etc.)
 #define COLOR_ORDER GRB  // Color order for your LED strip
+
+// LED Segment Configuration
+// Data flow: EYE_4 (outer) -> EYE_3 -> EYE_2 -> EYE_1 -> EYE_0 (center) -> CLOCK
+#define EYE_TOTAL_LEDS 62    // Total LEDs in all eye rings
+#define CLOCK_TOTAL_LEDS 101 // Total LEDs in clock ring
+
+// Eye Ring Definitions (LED indices)
+#define EYE_4_START 0  // Outermost eye ring start
+#define EYE_4_COUNT 24 // LEDs in ring 4
+#define EYE_4_END (EYE_4_START + EYE_4_COUNT - 1)
+
+#define EYE_3_START (EYE_4_END + 1) // Ring 3 start
+#define EYE_3_COUNT 18              // LEDs in ring 3
+#define EYE_3_END (EYE_3_START + EYE_3_COUNT - 1)
+
+#define EYE_2_START (EYE_3_END + 1) // Ring 2 start
+#define EYE_2_COUNT 12              // LEDs in ring 2
+#define EYE_2_END (EYE_2_START + EYE_2_COUNT - 1)
+
+#define EYE_1_START (EYE_2_END + 1) // Ring 1 start
+#define EYE_1_COUNT 6               // LEDs in ring 1
+#define EYE_1_END (EYE_1_START + EYE_1_COUNT - 1)
+
+#define EYE_0_START (EYE_1_END + 1) // Center LED (ring 0)
+#define EYE_0_COUNT 1               // Single center LED
+#define EYE_0_END (EYE_0_START + EYE_0_COUNT - 1)
+
+// Clock Ring Definition
+#define CLOCK_START (EYE_0_END + 1) // Clock ring start (LED 61)
+#define CLOCK_COUNT 101             // LEDs in clock ring
+#define CLOCK_END (CLOCK_START + CLOCK_COUNT - 1)
+
+// Ring Count
+#define NUM_EYE_RINGS 5   // EYE_4, EYE_3, EYE_2, EYE_1, EYE_0
+#define NUM_TOTAL_RINGS 6 // All eye rings + clock ring
+
+// Segment Type Definitions
+#define SEGMENT_EYE_4 0
+#define SEGMENT_EYE_3 1
+#define SEGMENT_EYE_2 2
+#define SEGMENT_EYE_1 3
+#define SEGMENT_EYE_0 4
+#define SEGMENT_CLOCK 5
+
+// Debug and Testing Options
+#define ENABLE_SEGMENT_DEBUG true  // Enable segment debugging output
+#define SEGMENT_TEST_INTERVAL 2000 // Segment test cycle interval (ms)
 
 // Brightness settings (0-255)
 #define DEFAULT_BRIGHTNESS 50

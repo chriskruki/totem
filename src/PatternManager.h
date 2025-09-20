@@ -6,6 +6,7 @@
 #include "config.h"
 #include "Pattern.h"
 #include "ColorPalette.h"
+#include "SegmentManager.h"
 
 /**
  * @brief Pattern manager class for handling multiple LED patterns and palettes
@@ -26,7 +27,8 @@ private:
   int patternCount;                // Number of loaded patterns
   int currentPatternIndex;         // Current active pattern index
 
-  PaletteManager paletteManager; // Color palette manager
+  PaletteManager paletteManager;  // Color palette manager
+  SegmentManager *segmentManager; // Pointer to segment manager
 
   bool autoSwitch;                  // Auto-switch patterns
   unsigned long autoSwitchInterval; // Auto-switch interval (ms)
@@ -47,8 +49,9 @@ public:
    * @brief Constructor
    * @param leds Pointer to LED array
    * @param numLeds Number of LEDs
+   * @param segManager Pointer to SegmentManager (optional)
    */
-  PatternManager(CRGB *leds, int numLeds);
+  PatternManager(CRGB *leds, int numLeds, SegmentManager *segManager = nullptr);
 
   /**
    * @brief Destructor

@@ -4,8 +4,8 @@
 // PatternManager Implementation
 // ============================================================================
 
-PatternManager::PatternManager(CRGB *leds, int numLeds)
-    : leds(leds), numLeds(numLeds), patternCount(0), currentPatternIndex(0),
+PatternManager::PatternManager(CRGB *leds, int numLeds, SegmentManager *segManager)
+    : leds(leds), numLeds(numLeds), segmentManager(segManager), patternCount(0), currentPatternIndex(0),
       autoSwitch(false), autoSwitchInterval(30000), lastAutoSwitch(0),
       globalBrightness(255), globalSpeed(DEFAULT_GLOBAL_SPEED),
       inTransition(false), transitionStart(0), transitionDuration(1000),
@@ -42,6 +42,16 @@ void PatternManager::initialize()
   addPattern(new PulsePattern(leds, numLeds, CRGB::Blue));
   addPattern(new TwinklePattern(leds, numLeds, 20));
   addPattern(new WavePattern(leds, numLeds, CRGB::Cyan, 10));
+
+  // Add segment-aware patterns if SegmentManager is available
+  if (segmentManager != nullptr)
+  {
+    addPattern(new MultiRingPattern(leds, numLeds, segmentManager, 3));
+    addPattern(new SpiralPattern(leds, numLeds, segmentManager, 2));
+    addPattern(new RipplePattern(leds, numLeds, segmentManager, 1000));
+    addPattern(new EyeBreathingPattern(leds, numLeds, segmentManager));
+    addPattern(new SegmentTestPattern(leds, numLeds, segmentManager, SEGMENT_TEST_INTERVAL));
+  }
 
   // Set initial palette for all patterns
   ColorPalette *defaultPalette = paletteManager.getCurrentPalette();

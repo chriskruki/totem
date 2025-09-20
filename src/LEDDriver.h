@@ -4,6 +4,7 @@
 #include <FastLED.h>
 #include "config.h"
 #include "PatternManager.h"
+#include "SegmentManager.h"
 
 /**
  * @brief Custom LED Driver class for ESP32 with FastLED
@@ -86,6 +87,9 @@ private:
     unsigned long lastButtonChange;
     unsigned long lastRead;
   } joystickState;
+
+  // Segment manager for multi-ring operations
+  SegmentManager segmentManager;
 
   // Private mode processing methods
   void processMainMode();
@@ -343,6 +347,12 @@ public:
    * @return Reference to PatternManager
    */
   PatternManager &getPatternManager();
+
+  /**
+   * @brief Get segment manager reference
+   * @return Reference to SegmentManager
+   */
+  SegmentManager &getSegmentManager();
 
   /**
    * @brief Handle pattern-related serial commands
