@@ -71,6 +71,9 @@
 #define ENABLE_SEGMENT_DEBUG false // Enable segment debugging output
 #define SEGMENT_TEST_INTERVAL 2000 // Segment test cycle interval (ms)
 
+// Direction Reversal Options
+#define REVERSE_EYE_DIRECTION true // Reverse eye LED direction to match clock direction
+
 // Brightness and Speed Mode Settings
 #define BRIGHTNESS_LEVELS 9 // Number of brightness levels (1-10)
 #define SPEED_LEVELS 9      // Number of speed levels (1-10)
@@ -78,7 +81,7 @@
 // Brightness preview LEDs (vertical column in eye rings)
 #define BRIGHTNESS_PREVIEW_LEDS 9
 const uint16_t BRIGHTNESS_LED_POSITIONS[BRIGHTNESS_PREVIEW_LEDS] = {
-    0,   // EYE_4 top
+    0,  // EYE_4 top
     24, // EYE_3 top
     40, // EYE_2 top
     52, // EYE_1 top

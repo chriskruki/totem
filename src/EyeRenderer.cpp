@@ -182,8 +182,8 @@ uint8_t EyeRenderer::calculateDirection(int joystickX, int joystickY)
 float EyeRenderer::getAngleDegrees(float x, float y)
 {
   // Calculate angle in degrees, with 0° = North (positive Y)
-  // Fix coordinate system: negate y to match expected directions
-  float angle = atan2(x, -y) * 180.0f / PI;
+  // Since segments are now reversed, use original atan2(x, y) coordinate system
+  float angle = atan2(x, y) * 180.0f / PI;
 
   // Convert to 0-360 range
   if (angle < 0)

@@ -1262,9 +1262,9 @@ FireworkAction::FireworkAction(CRGB *leds, int numLeds, CRGB *poleLeds, int pole
       phaseStartTime(0),
       launchPosition(0.0f),
       explosionRadius(0.0f),
-      explosionHue(0)
+      explosionHue(0),
+      fadeIntensity(1.0f)
 {
-  initializeSparkles();
 }
 
 void FireworkAction::trigger(unsigned long currentTime)
@@ -1275,7 +1275,7 @@ void FireworkAction::trigger(unsigned long currentTime)
   launchPosition = 0.0f;
   explosionRadius = 0.0f;
   explosionHue = random8();
-  initializeSparkles();
+  fadeIntensity = 1.0f;
 }
 
 bool FireworkAction::update(unsigned long currentTime)
@@ -1304,15 +1304,15 @@ bool FireworkAction::update(unsigned long currentTime)
     updateExplosionPhase(currentTime);
     if (phaseElapsed >= EXPLOSION_DURATION)
     {
-      currentPhase = PHASE_SPARKLES;
+      currentPhase = PHASE_FADEOUT;
       phaseStartTime = currentTime;
-      addRandomSparkles(MAX_SPARKLES); // Fill with initial sparkles
+      fadeIntensity = 1.0f; // Start at full intensity
     }
     break;
 
-  case PHASE_SPARKLES:
-    updateSparklePhase(currentTime);
-    if (phaseElapsed >= SPARKLE_DURATION)
+  case PHASE_FADEOUT:
+    updateFadeoutPhase(currentTime);
+    if (phaseElapsed >= FADEOUT_DURATION)
     {
       // Action is complete
       isActive = false;
@@ -1480,124 +1480,87 @@ void FireworkAction::updateExplosionPhase(unsigned long currentTime)
   }
 }
 
-void FireworkAction::updateSparklePhase(unsigned long currentTime)
+void FireworkAction::updateFadeoutPhase(unsigned long currentTime)
 {
-  // Update existing sparkles
-  for (int i = 0; i < MAX_SPARKLES; i++)
+  unsigned long phaseElapsed = currentTime - phaseStartTime;
+
+  // Calculate fade progress (1.0 to 0.0 over FADEOUT_DURATION)
+  float fadeProgress = 1.0f - ((float)phaseElapsed / (float)FADEOUT_DURATION);
+  fadeProgress = max(0.0f, min(1.0f, fadeProgress));
+
+  // Clear main LEDs first
+  if (leds && numLeds > 0)
   {
-    if (sparkles[i].active)
+    fill_solid(leds, numLeds, CRGB::Black);
+  }
+
+  // Render fading explosion rings
+  for (int ring = 0; ring < 6; ring++)
+  {
+    // Calculate ring color (same as explosion but fading)
+    uint8_t ringHue = (explosionHue + ring * 40) % 255;
+    uint8_t ringBrightness = (uint8_t)(fadeProgress * brightness);
+
+    if (ringBrightness > 0)
     {
-      // Fade sparkle
-      if (sparkles[i].intensity > sparkles[i].decayRate)
+      CHSV hsvColor(ringHue, 255, ringBrightness);
+      CRGB rgbColor;
+      hsv2rgb_rainbow(hsvColor, rgbColor);
+
+      // Light up the appropriate ring
+      if (ring < 5)
       {
-        sparkles[i].intensity -= sparkles[i].decayRate;
+        // Eye rings (EYE_0 to EYE_4) - center to outer
+        int segmentType = SEGMENT_EYE_0 - ring;
+        int startLED, count;
+
+        switch (segmentType)
+        {
+        case SEGMENT_EYE_0:
+          startLED = EYE_0_START;
+          count = EYE_0_COUNT;
+          break;
+        case SEGMENT_EYE_1:
+          startLED = EYE_1_START;
+          count = EYE_1_COUNT;
+          break;
+        case SEGMENT_EYE_2:
+          startLED = EYE_2_START;
+          count = EYE_2_COUNT;
+          break;
+        case SEGMENT_EYE_3:
+          startLED = EYE_3_START;
+          count = EYE_3_COUNT;
+          break;
+        case SEGMENT_EYE_4:
+          startLED = EYE_4_START;
+          count = EYE_4_COUNT;
+          break;
+        default:
+          continue;
+        }
+
+        for (int i = 0; i < count; i++)
+        {
+          int ledIndex = startLED + i;
+          if (ledIndex < numLeds)
+          {
+            leds[ledIndex] = rgbColor;
+          }
+        }
       }
       else
       {
-        sparkles[i].active = false;
-        continue;
-      }
-
-      // Set LED color
-      if (sparkles[i].ledIndex < numLeds)
-      {
-        CHSV hsvColor(sparkles[i].hue, 200, sparkles[i].intensity);
-        CRGB rgbColor;
-        hsv2rgb_rainbow(hsvColor, rgbColor);
-        leds[sparkles[i].ledIndex] = rgbColor;
+        // Clock ring
+        for (int i = 0; i < CLOCK_COUNT; i++)
+        {
+          int ledIndex = CLOCK_START + i;
+          if (ledIndex < numLeds)
+          {
+            leds[ledIndex] = rgbColor;
+          }
+        }
       }
     }
-  }
-
-  // Occasionally add new sparkles
-  if (random8() < 30)
-  { // 30/255 chance each frame
-    addRandomSparkles(1);
-  }
-}
-
-void FireworkAction::initializeSparkles()
-{
-  for (int i = 0; i < MAX_SPARKLES; i++)
-  {
-    sparkles[i].active = false;
-    sparkles[i].intensity = 0;
-    sparkles[i].ledIndex = 0;
-    sparkles[i].hue = 0;
-    sparkles[i].decayRate = 1;
-  }
-}
-
-void FireworkAction::addRandomSparkles(int count)
-{
-  for (int i = 0; i < count; i++)
-  {
-    // Find inactive sparkle slot
-    for (int j = 0; j < MAX_SPARKLES; j++)
-    {
-      if (!sparkles[j].active)
-      {
-        sparkles[j].active = true;
-        sparkles[j].ledIndex = getRandomEyeOrClockLED();
-        sparkles[j].intensity = random8(150, 255); // Bright sparkles
-        sparkles[j].hue = random8();               // Random color
-        sparkles[j].decayRate = random8(1, 4);     // Random fade rate
-        break;
-      }
-    }
-  }
-}
-
-float FireworkAction::getDistanceFromCenter(uint16_t ledIndex)
-{
-  // Calculate distance from center (EYE_0) for explosion effect
-  if (ledIndex >= EYE_0_START && ledIndex < EYE_0_START + EYE_0_COUNT)
-  {
-    return 0.0f; // Center
-  }
-  else if (ledIndex >= EYE_1_START && ledIndex < EYE_1_START + EYE_1_COUNT)
-  {
-    return 1.0f;
-  }
-  else if (ledIndex >= EYE_2_START && ledIndex < EYE_2_START + EYE_2_COUNT)
-  {
-    return 2.0f;
-  }
-  else if (ledIndex >= EYE_3_START && ledIndex < EYE_3_START + EYE_3_COUNT)
-  {
-    return 3.0f;
-  }
-  else if (ledIndex >= EYE_4_START && ledIndex < EYE_4_START + EYE_4_COUNT)
-  {
-    return 4.0f;
-  }
-  else if (ledIndex >= CLOCK_START && ledIndex < CLOCK_START + CLOCK_COUNT)
-  {
-    return 5.0f; // Clock ring (outermost)
-  }
-  return 6.0f; // Unknown/outside
-}
-
-uint16_t FireworkAction::getRandomEyeOrClockLED()
-{
-  // Randomly select from eye rings or clock ring
-  int ringChoice = random8(6); // 0-5 for the 6 rings
-
-  switch (ringChoice)
-  {
-  case 0:
-    return EYE_0_START; // Center (only 1 LED)
-  case 1:
-    return EYE_1_START + random8(EYE_1_COUNT);
-  case 2:
-    return EYE_2_START + random8(EYE_2_COUNT);
-  case 3:
-    return EYE_3_START + random8(EYE_3_COUNT);
-  case 4:
-    return EYE_4_START + random8(EYE_4_COUNT);
-  case 5:
-    return CLOCK_START + random8(CLOCK_COUNT);
-  default:
-    return EYE_0_START;
   }
 }

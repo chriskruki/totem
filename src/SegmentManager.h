@@ -114,6 +114,13 @@ public:
   const LEDSegment *getAllSegments() const { return segments; }
 
   /**
+   * @brief Check if a segment should have its direction reversed
+   * @param segmentType The segment type to check
+   * @return True if segment direction should be reversed
+   */
+  bool isSegmentReversed(uint8_t segmentType) const;
+
+  /**
    * @brief Check if a segment type is valid
    * @param segmentType The segment type to check
    * @return True if valid, false otherwise

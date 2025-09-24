@@ -596,7 +596,7 @@ private:
   {
     PHASE_LAUNCH,    // White trail traveling up pole
     PHASE_EXPLOSION, // Rainbow cascade from eye center to clock
-    PHASE_SPARKLES   // Lingering sparkly remnants
+    PHASE_FADEOUT    // Slow fade-out of rings
   };
 
   FireworkPhase currentPhase;
@@ -611,28 +611,14 @@ private:
   uint8_t explosionHue;                           // Current hue for rainbow effect
   static const uint32_t EXPLOSION_DURATION = 267; // Explosion animation time (3x faster)
 
-  // Sparkle phase
-  struct Sparkle
-  {
-    uint16_t ledIndex; // LED position
-    uint8_t intensity; // Current brightness
-    uint8_t hue;       // Sparkle color
-    uint8_t decayRate; // How fast it fades
-    bool active;       // Is this sparkle active
-  };
-
-  static const int MAX_SPARKLES = 30; // Reduced for multiple instances
-  Sparkle sparkles[MAX_SPARKLES];
-  static const uint32_t SPARKLE_DURATION = 1000; // 1 second of sparkles
+  // Fade-out phase
+  float fadeIntensity;                             // Current fade intensity (1.0 to 0.0)
+  static const uint32_t FADEOUT_DURATION = 2000;  // 2 seconds of fade-out
 
   // Helper methods
   void updateLaunchPhase(unsigned long currentTime);
   void updateExplosionPhase(unsigned long currentTime);
-  void updateSparklePhase(unsigned long currentTime);
-  void initializeSparkles();
-  void addRandomSparkles(int count);
-  float getDistanceFromCenter(uint16_t ledIndex);
-  uint16_t getRandomEyeOrClockLED();
+  void updateFadeoutPhase(unsigned long currentTime);
 
 public:
   FireworkAction(CRGB *leds, int numLeds, CRGB *poleLeds = nullptr, int poleNumLeds = 0);

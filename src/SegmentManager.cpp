@@ -55,6 +55,12 @@ int16_t SegmentManager::getSegmentLEDByPosition(uint8_t segmentType, float posit
     ledIndex = 0;
   }
 
+  // Reverse direction if needed
+  if (isSegmentReversed(segmentType))
+  {
+    ledIndex = segment->count - 1 - ledIndex;
+  }
+
   return ledIndex;
 }
 
@@ -66,7 +72,14 @@ float SegmentManager::getPositionBySegmentLED(uint8_t segmentType, uint16_t ledI
     return -1.0f;
   }
 
-  return (float)ledIndex / (float)segment->count;
+  // Reverse LED index if needed (reverse the input before calculation)
+  uint16_t actualLedIndex = ledIndex;
+  if (isSegmentReversed(segmentType))
+  {
+    actualLedIndex = segment->count - 1 - ledIndex;
+  }
+
+  return (float)actualLedIndex / (float)segment->count;
 }
 
 int16_t SegmentManager::getAbsoluteLEDIndex(uint8_t segmentType, uint16_t relativeIndex) const
@@ -201,4 +214,15 @@ void SegmentManager::printSegmentInfo() const
   Serial.print("Total LEDs: ");
   Serial.println(NUM_LEDS);
   Serial.println("===============================");
+}
+
+bool SegmentManager::isSegmentReversed(uint8_t segmentType) const
+{
+#if REVERSE_EYE_DIRECTION
+  // Reverse all eye segments to match clock direction
+  return (segmentType >= SEGMENT_EYE_4 && segmentType <= SEGMENT_EYE_0);
+#else
+  // No segments reversed by default
+  return false;
+#endif
 }
