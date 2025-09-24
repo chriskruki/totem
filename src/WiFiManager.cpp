@@ -257,14 +257,17 @@ String WiFiManager::generateStatusHTML()
   String modeName = "";
   switch (mode)
   {
-  case MODE_MAIN:
-    modeName = "Main Mode";
-    break;
   case MODE_SETTINGS:
     modeName = "Settings Mode";
     break;
-  case MODE_POINTER:
-    modeName = "Pointer Mode";
+  case MODE_PATTERN:
+    modeName = "Pattern/Palette Explore Mode";
+    break;
+  case MODE_EYE:
+    modeName = "Eye Mode";
+    break;
+  case MODE_BRIGHTNESS_SPEED:
+    modeName = "Brightness/Speed Mode";
     break;
   default:
     modeName = "Unknown";
@@ -287,8 +290,8 @@ String WiFiManager::generateStatusHTML()
   html += "<p>" + String(ledDriver->getBrightness()) + " / 255</p>\n";
   html += "</div>\n";
 
-  // Pattern Information (only show in main mode)
-  if (mode == MODE_MAIN)
+  // Pattern Information (show in pattern and eye modes)
+  if (mode == MODE_PATTERN || mode == MODE_EYE)
   {
     html += "<div>\n";
     html += "<h2>Pattern Information</h2>\n";
@@ -385,14 +388,17 @@ String WiFiManager::generateStatusJSON()
   String modeName = "";
   switch (mode)
   {
-  case MODE_MAIN:
-    modeName = "Main";
-    break;
   case MODE_SETTINGS:
     modeName = "Settings";
     break;
-  case MODE_POINTER:
-    modeName = "Pointer";
+  case MODE_PATTERN:
+    modeName = "Pattern";
+    break;
+  case MODE_EYE:
+    modeName = "Eye";
+    break;
+  case MODE_BRIGHTNESS_SPEED:
+    modeName = "BrightnessSpeed";
     break;
   default:
     modeName = "Unknown";
@@ -412,8 +418,8 @@ String WiFiManager::generateStatusJSON()
   // Brightness
   json += "  \"brightness\": " + String(ledDriver->getBrightness()) + ",\n";
 
-  // Pattern information (only include in main mode)
-  if (mode == MODE_MAIN)
+  // Pattern information (include in pattern and eye modes)
+  if (mode == MODE_PATTERN || mode == MODE_EYE)
   {
     json += "  \"pattern\": {\n";
     PatternManager &patternManager = ledDriver->getPatternManager();

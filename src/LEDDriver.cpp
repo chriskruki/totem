@@ -4,7 +4,7 @@
 LEDDriver::LEDDriver() : brightness(DEFAULT_BRIGHTNESS),
                          lastUpdate(0),
                          needsUpdate(false),
-                         currentMode(MODE_MAIN),
+                         currentMode(MODE_PATTERN),
                          currentR(STATIC_COLOR_R),
                          currentG(STATIC_COLOR_G),
                          currentB(STATIC_COLOR_B),
@@ -37,8 +37,19 @@ LEDDriver::LEDDriver() : brightness(DEFAULT_BRIGHTNESS),
                          yMax(JOYSTICK_MAX),
                          clickCount(0),
                          lastClickTime(0),
-                         firstClickTime(0)
+                         firstClickTime(0),
+                         eyeRenderer(nullptr),
+                         activeFireworkCount(0),
+                         inFireworkMode(false),
+                         fireworkModeStartTime(0),
+                         lastJoystickUpState(false)
 {
+  // Initialize firework array
+  for (int i = 0; i < MAX_ACTIVE_FIREWORKS; i++)
+  {
+    activeFireworks[i] = nullptr;
+  }
+
   // Initialize joystick state
   joystickState.x = JOYSTICK_CENTER;
   joystickState.y = JOYSTICK_CENTER;
@@ -52,14 +63,21 @@ LEDDriver::~LEDDriver()
 {
   // Clean up pattern manager
   delete patternManager;
+
+  // Clean up eye renderer
+  delete eyeRenderer;
 }
 
 bool LEDDriver::initialize()
 {
   Serial.println("Initializing LED Driver...");
 
-  // Initialize FastLED
+  // Initialize FastLED for main LEDs (Eye + Clock)
   FastLED.addLeds<LED_TYPE, DATA_PIN, COLOR_ORDER>(leds, NUM_LEDS);
+
+  // Initialize FastLED for pole LEDs
+  FastLED.addLeds<POLE_LED_TYPE, POLE_DATA_PIN, POLE_COLOR_ORDER>(poleLeds, POLE_NUM_LEDS);
+
   FastLED.setBrightness(brightness);
 
   // Set FastLED power limit based on our safety constants
@@ -84,6 +102,12 @@ bool LEDDriver::initialize()
   // Initialize pattern manager
   patternManager = new PatternManager(leds, NUM_LEDS, &segmentManager);
   patternManager->initialize();
+
+  // Initialize eye renderer for pointer mode
+  eyeRenderer = new EyeRenderer(leds, &segmentManager);
+
+  // Set eye colors - blue/green iris like in your image
+  eyeRenderer->setEyeColors(CRGB::Cyan, CRGB(5, 5, 5)); // Cyan iris, very dim background
 
   Serial.print("LED Driver initialized with ");
   Serial.print(NUM_LEDS);
@@ -111,6 +135,9 @@ void LEDDriver::update()
   // Update LEDs at specified interval
   if (currentTime - lastUpdate >= LED_UPDATE_INTERVAL)
   {
+    // Update pole patterns
+    updatePole();
+
     if (needsUpdate)
     {
       FastLED.show();
@@ -233,35 +260,37 @@ void LEDDriver::readJoystick()
       // Normal mode switching on single button press
       else if (buttonState && !inCalibrationMode)
       {
-        // If in settings mode, single click returns to main mode
+        // If in settings mode, single click returns to pattern mode
         if (currentMode == MODE_SETTINGS)
         {
-          currentMode = MODE_MAIN;
-          Serial.println("Mode changed to: Main Mode - Exited Settings Mode");
+          currentMode = MODE_PATTERN;
+          Serial.println("Mode changed to: Pattern/Palette Explore Mode - Exited Settings Mode");
         }
         else
         {
-          // Normal cycling between Main -> Pointer -> Pattern -> Main
-          if (currentMode == MODE_MAIN)
+          // Check if we're in firework mode - single click exits
+          if (inFireworkMode)
           {
-            currentMode = MODE_POINTER;
-            Serial.println("Mode changed to: Pointer Mode");
+            exitFireworkMode();
+            return; // Don't process normal mode switching
           }
-          else if (currentMode == MODE_POINTER)
+
+          // Simple toggle between Pattern and Eye modes
+          if (currentMode == MODE_PATTERN)
+          {
+            currentMode = MODE_EYE;
+            Serial.println("Mode changed to: Eye Mode");
+          }
+          else if (currentMode == MODE_EYE)
           {
             currentMode = MODE_PATTERN;
-            Serial.println("Mode changed to: Pattern Browse Mode");
-          }
-          else if (currentMode == MODE_PATTERN)
-          {
-            currentMode = MODE_MAIN;
-            Serial.println("Mode changed to: Main Mode");
+            Serial.println("Mode changed to: Pattern/Palette Explore Mode");
           }
           else
           {
-            // Fallback - should not happen, but go to main mode
-            currentMode = MODE_MAIN;
-            Serial.println("Mode changed to: Main Mode (fallback)");
+            // Fallback - should not happen, but go to pattern mode
+            currentMode = MODE_PATTERN;
+            Serial.println("Mode changed to: Pattern/Palette Explore Mode (fallback)");
           }
         }
       }
@@ -283,24 +312,29 @@ void LEDDriver::processJoystickInput()
 
   switch (currentMode)
   {
-  case MODE_MAIN:
-    // Mode 0: Main mode - display selected pattern and palette
-    processMainMode();
-    break;
-
   case MODE_SETTINGS:
-    // Mode 1: Settings mode - quadrant-based interface
+    // Mode 0: Settings mode - quadrant-based interface
     processSettingsMode();
     break;
 
-  case MODE_POINTER:
-    // Mode 2: Pointer mode - red background with chase pointer
-    processPointerMode();
+  case MODE_PATTERN:
+    // Mode 1: Pattern/Palette explore mode - joystick controls pattern/palette
+    processPatternMode();
     break;
 
-  case MODE_PATTERN:
-    // Mode 3: Pattern browse mode - joystick controls pattern/palette
-    processPatternMode();
+  case MODE_EYE:
+    // Mode 2: Eye mode - shows patterns on clock, eye tracking when joystick active
+    processEyeMode();
+    break;
+
+  case MODE_FIREWORK:
+    // Mode 3: Firework mode - triple-click activated, joystick up launches fireworks
+    processFireworkMode();
+    break;
+
+  case MODE_BRIGHTNESS_SPEED:
+    // Mode 4: Combined brightness/speed mode - up/down brightness, left/right speed
+    processBrightnessSpeedMode();
     break;
   }
 }
@@ -328,68 +362,46 @@ void LEDDriver::processMainMode()
   }
 }
 
-void LEDDriver::processPointerMode()
+void LEDDriver::processEyeMode()
 {
-  // Mode 2: Pointer mode - circular pointer mode with background
-  // Map joystick X/Y to circular LED position
+  // Mode 2: Eye mode - shows patterns on clock, eye tracking when joystick active
+  unsigned long currentTime = millis();
 
-  int xDiff = joystickState.x - JOYSTICK_CENTER;
-  int yDiff = joystickState.y - JOYSTICK_CENTER;
-
-  // Check if joystick is in deadzone
-  int magnitude = sqrt(xDiff * xDiff + yDiff * yDiff);
-
-  // Clear all LEDs and set background color
-  // We do this every time to ensure clean display
-  for (int i = 0; i < NUM_LEDS; i++)
+  if (patternManager)
   {
-    setLED(i, POINTER_BG_COLOR_HTML, POINTER_BG_BRIGHTNESS);
-  }
+    // Set the current pattern and palette based on selected indices
+    patternManager->setCurrentPattern(selectedPatternIndex, false);
+    patternManager->setCurrentPalette(selectedPaletteIndex);
 
-  if (magnitude > JOYSTICK_DEADZONE)
-  {
-    // Calculate angle in radians (atan2 returns -π to π)
-    // Note: We need to flip Y coordinate to match expected behavior
-    // Standard joystick: Up = higher Y values, but we want Up = 12 o'clock
-    float angle = atan2(yDiff, xDiff); // Flip Y to correct coordinate system
+    // Apply global settings
+    patternManager->setGlobalBrightness(globalBrightness);
+    patternManager->setGlobalSpeed(globalSpeed);
 
-    // Convert to our clock layout where:
-    // - LED 0 is at 6 o'clock (bottom)
-    // - LEDs go counter-clockwise
-    // - We want: Up=12, Right=3, Down=6, Left=9
-
-    // atan2(-yDiff, xDiff) gives: Right=0°, Up=90°, Left=180°/-180°, Down=-90°
-    // We want: Down=0° (LED 0), Left=90°, Up=180°, Right=270°
-    // So we need to rotate by +90°
-    angle = angle + M_PI / 2; // Rotate +90° to put Down at 0°
-
-    // Normalize to 0-2π range
-    if (angle < 0)
+    // Update pattern manager - this will update the LEDs with patterns
+    if (patternManager->update(currentTime))
     {
-      angle += 2 * M_PI;
+      // Check if joystick is outside deadzone
+      bool joystickActive = (abs(joystickState.x - JOYSTICK_CENTER) > JOYSTICK_DEADZONE ||
+                             abs(joystickState.y - JOYSTICK_CENTER) > JOYSTICK_DEADZONE);
+
+      if (joystickActive && eyeRenderer)
+      {
+        // Clear eye segments with black background
+        for (int i = 0; i < 5; i++)
+        {
+          segmentManager.fillSegment(leds, i + SEGMENT_EYE_4, CRGB::Black);
+        }
+
+        // Update eye position based on joystick
+        eyeRenderer->updateEyePosition(joystickState.x, joystickState.y);
+
+        // Render eye on the black background
+        eyeRenderer->renderEye();
+      }
+
+      show(); // Show updated LEDs
     }
-
-    // Convert angle to LED position (0 to NUM_LEDS-1)
-    // Starting at LED 0 (6 o'clock), going counter-clockwise
-    int centerLED = (int)((angle / (2 * M_PI)) * NUM_LEDS) % NUM_LEDS;
-
-    // Calculate dynamic width based on joystick magnitude
-    // Map magnitude from deadzone edge to max range → width from min to max
-    // Use maximum single-axis distance so straight directions get full width
-    int maxRadius = JOYSTICK_MAX - JOYSTICK_CENTER; // e.g., 4095 - 1790 = 2305
-    int maxMagnitude = maxRadius;                   // Use single-axis max, not diagonal
-    int effectiveMagnitude = constrain(magnitude - JOYSTICK_DEADZONE, 0, maxMagnitude);
-    int maxEffectiveMagnitude = maxMagnitude - JOYSTICK_DEADZONE;
-
-    // Scale magnitude to width range
-    int width = map(effectiveMagnitude, 0, maxEffectiveMagnitude, POINTER_WIDTH_MIN, POINTER_WIDTH_MAX);
-    width = constrain(width, POINTER_WIDTH_MIN, POINTER_WIDTH_MAX);
-
-    // Create the pointer with dynamic width
-    createPointer(centerLED, width);
   }
-
-  show();
 }
 
 void LEDDriver::createPointer(int centerLED, int width)
@@ -484,14 +496,17 @@ void LEDDriver::setMode(uint8_t mode)
     Serial.print("Mode manually set to: ");
     switch (currentMode)
     {
-    case MODE_MAIN:
-      Serial.println("Main Mode");
-      break;
     case MODE_SETTINGS:
       Serial.println("Settings Mode");
       break;
-    case MODE_POINTER:
-      Serial.println("Pointer Mode");
+    case MODE_PATTERN:
+      Serial.println("Pattern/Palette Explore Mode");
+      break;
+    case MODE_EYE:
+      Serial.println("Eye Mode");
+      break;
+    case MODE_BRIGHTNESS_SPEED:
+      Serial.println("Brightness/Speed Mode");
       break;
     }
   }
@@ -518,7 +533,7 @@ bool LEDDriver::detectDoubleClick(bool buttonPressed, unsigned long currentTime)
   }
 
   // Reset if too much time has passed since first click
-  if (clickCount > 0 && (currentTime - firstClickTime) > DOUBLE_CLICK_TIMEOUT)
+  if (clickCount > 0 && (currentTime - firstClickTime) > TRIPLE_CLICK_TIMEOUT)
   {
     clickCount = 0;
   }
@@ -529,34 +544,53 @@ bool LEDDriver::detectDoubleClick(bool buttonPressed, unsigned long currentTime)
     clickCount = 1;
     firstClickTime = currentTime;
     lastClickTime = currentTime;
-    Serial.println("Click 1/2");
+    Serial.println("Click 1/3");
     return false;
   }
 
-  // Second click - check timing
-  if ((currentTime - lastClickTime) < DOUBLE_CLICK_TIMEOUT)
+  // Subsequent clicks - check timing
+  if ((currentTime - lastClickTime) < TRIPLE_CLICK_TIMEOUT)
   {
     clickCount++;
     lastClickTime = currentTime;
 
     Serial.print("Click ");
     Serial.print(clickCount);
-    Serial.println("/2");
+    Serial.println("/3");
 
-    if (clickCount >= 2)
+    if (clickCount == 2)
+    {
+      // Double click detected - continue for potential triple click
+      return false;
+    }
+    else if (clickCount >= 3)
     {
       clickCount = 0; // Reset for next time
-      Serial.println("DOUBLE CLICK DETECTED!");
-      return true;
+      Serial.println("TRIPLE CLICK DETECTED!");
+
+      // Enter firework mode on triple click
+      if (!inFireworkMode)
+      {
+        enterFireworkMode(currentTime);
+      }
+      return false; // Don't process as double click
     }
   }
   else
   {
+    // Check if we had a double click before timeout
+    if (clickCount == 2)
+    {
+      clickCount = 0;
+      Serial.println("DOUBLE CLICK DETECTED!");
+      return true;
+    }
+
     // Too slow, reset
     clickCount = 1;
     firstClickTime = currentTime;
     lastClickTime = currentTime;
-    Serial.println("Click 1/2 (reset)");
+    Serial.println("Click 1/3 (reset)");
   }
 
   return false;
@@ -600,6 +634,99 @@ void LEDDriver::exitCalibrationMode()
 
   // Restore normal color
   setSolidColor(currentR, currentG, currentB);
+  show();
+}
+
+void LEDDriver::processBrightnessSpeedMode()
+{
+  // Mode 4: Combined brightness/speed mode - up/down brightness, left/right speed
+  unsigned long currentTime = millis();
+
+  // Handle joystick Y-axis for brightness control
+  int yDiff = joystickState.y - JOYSTICK_CENTER;
+  int xDiff = joystickState.x - JOYSTICK_CENTER;
+
+  static int lastBrightnessChange = 0;
+  static unsigned long lastBrightnessChangeTime = 0;
+  static int lastSpeedChange = 0;
+  static unsigned long lastSpeedChangeTime = 0;
+  const unsigned long CHANGE_INTERVAL = 200;
+
+  // Handle brightness control (Y-axis)
+  if (abs(yDiff) > JOYSTICK_DEADZONE &&
+      (currentTime - lastBrightnessChangeTime) > CHANGE_INTERVAL)
+  {
+    if (yDiff > 0 && lastBrightnessChange <= 0) // Up - increase brightness
+    {
+      if (globalBrightness < SETTINGS_BRIGHTNESS_MAX)
+      {
+        globalBrightness = min(SETTINGS_BRIGHTNESS_MAX, globalBrightness + (SETTINGS_BRIGHTNESS_MAX / BRIGHTNESS_LEVELS));
+        Serial.print("Brightness increased to: ");
+        Serial.println(globalBrightness);
+        lastBrightnessChange = 1;
+        lastBrightnessChangeTime = currentTime;
+      }
+    }
+    else if (yDiff < 0 && lastBrightnessChange >= 0) // Down - decrease brightness
+    {
+      if (globalBrightness > SETTINGS_BRIGHTNESS_MIN)
+      {
+        globalBrightness = max(SETTINGS_BRIGHTNESS_MIN, globalBrightness - (SETTINGS_BRIGHTNESS_MAX / BRIGHTNESS_LEVELS));
+        Serial.print("Brightness decreased to: ");
+        Serial.println(globalBrightness);
+        lastBrightnessChange = -1;
+        lastBrightnessChangeTime = currentTime;
+      }
+    }
+  }
+  else if (abs(yDiff) <= JOYSTICK_DEADZONE)
+  {
+    lastBrightnessChange = 0; // Reset when joystick returns to center
+  }
+
+  // Handle speed control (X-axis)
+  if (abs(xDiff) > JOYSTICK_DEADZONE &&
+      (currentTime - lastSpeedChangeTime) > CHANGE_INTERVAL)
+  {
+    if (xDiff > 0 && lastSpeedChange <= 0) // Right - increase speed
+    {
+      if (globalSpeed < SETTINGS_SPEED_MAX)
+      {
+        globalSpeed = min(SETTINGS_SPEED_MAX, globalSpeed + ((SETTINGS_SPEED_MAX - SETTINGS_SPEED_MIN) / SPEED_LEVELS));
+        Serial.print("Speed increased to: ");
+        Serial.println(globalSpeed);
+        lastSpeedChange = 1;
+        lastSpeedChangeTime = currentTime;
+      }
+    }
+    else if (xDiff < 0 && lastSpeedChange >= 0) // Left - decrease speed
+    {
+      if (globalSpeed > SETTINGS_SPEED_MIN)
+      {
+        globalSpeed = max(SETTINGS_SPEED_MIN, globalSpeed - ((SETTINGS_SPEED_MAX - SETTINGS_SPEED_MIN) / SPEED_LEVELS));
+        Serial.print("Speed decreased to: ");
+        Serial.println(globalSpeed);
+        lastSpeedChange = -1;
+        lastSpeedChangeTime = currentTime;
+      }
+    }
+  }
+  else if (abs(xDiff) <= JOYSTICK_DEADZONE)
+  {
+    lastSpeedChange = 0; // Reset when joystick returns to center
+  }
+
+  // Clear all LEDs
+  fill_solid(leds, NUM_LEDS, CRGB::Black);
+
+  // Render wave effect on clock ring (reflects both brightness and speed)
+  renderWaveEffectOnClock();
+
+  // Render combined preview showing both brightness and speed indicators
+  uint8_t brightnessLevel = map(globalBrightness, SETTINGS_BRIGHTNESS_MIN, SETTINGS_BRIGHTNESS_MAX, 1, BRIGHTNESS_LEVELS);
+  uint8_t speedLevel = map(globalSpeed * 10, SETTINGS_SPEED_MIN * 10, SETTINGS_SPEED_MAX * 10, 1, SPEED_LEVELS);
+  renderCombinedPreview(brightnessLevel, speedLevel);
+
   show();
 }
 
@@ -1687,8 +1814,8 @@ void LEDDriver::applySelectedSetting()
     break;
   }
 
-  // Return to main mode
-  currentMode = MODE_MAIN;
+  // Return to pattern mode
+  currentMode = MODE_PATTERN;
   settingsPhase = PHASE_1_QUADRANTS;
   stopHolding();
   currentQuadrant = -1;
@@ -1697,10 +1824,405 @@ void LEDDriver::applySelectedSetting()
   stickyPointerPosition = -1;
   hasStickyPointer = false;
 
-  Serial.println("Returning to Main Mode");
+  Serial.println("Returning to Pattern/Palette Explore Mode");
 }
 
 SegmentManager &LEDDriver::getSegmentManager()
 {
   return segmentManager;
+}
+
+void LEDDriver::renderBrightnessPreview(uint8_t level)
+{
+  // Render brightness level on vertical column LEDs in eye rings
+  // Level 1 = only bottom LED (12), Level 10 = all LEDs lit
+
+  CRGB previewColor = CRGB::White;
+
+  for (uint8_t i = 0; i < min((int)level, BRIGHTNESS_PREVIEW_LEDS); i++)
+  {
+    uint16_t ledIndex = BRIGHTNESS_LED_POSITIONS[i];
+    if (ledIndex < NUM_LEDS)
+    {
+      leds[ledIndex] = previewColor;
+    }
+  }
+}
+
+void LEDDriver::renderSpeedPreview(uint8_t level)
+{
+  // Render speed level on horizontal line LEDs in eye rings
+  // Level 1 = only left LED (6), Level 10 = all LEDs lit
+
+  CRGB previewColor = CRGB::Blue;
+
+  for (uint8_t i = 0; i < min((int)level, SPEED_PREVIEW_LEDS); i++)
+  {
+    uint16_t ledIndex = SPEED_LED_POSITIONS[i];
+    if (ledIndex < NUM_LEDS)
+    {
+      leds[ledIndex] = previewColor;
+    }
+  }
+}
+
+void LEDDriver::renderCombinedPreview(uint8_t brightnessLevel, uint8_t speedLevel)
+{
+  // Render both brightness (vertical) and speed (horizontal) previews simultaneously
+  // Brightness uses white LEDs, speed uses blue LEDs
+  // Center LED (60) will be mixed if both are active
+
+  CRGB brightnessColor = CRGB::White;
+  CRGB speedColor = CRGB::Blue;
+  CRGB mixedColor = CRGB(128, 128, 255); // Purple-ish mix for center overlap
+
+  // Render brightness preview (vertical)
+  for (uint8_t i = 0; i < min((int)brightnessLevel, BRIGHTNESS_PREVIEW_LEDS); i++)
+  {
+    uint16_t ledIndex = BRIGHTNESS_LED_POSITIONS[i];
+    if (ledIndex < NUM_LEDS)
+    {
+      leds[ledIndex] = brightnessColor;
+    }
+  }
+
+  // Render speed preview (horizontal)
+  for (uint8_t i = 0; i < min((int)speedLevel, SPEED_PREVIEW_LEDS); i++)
+  {
+    uint16_t ledIndex = SPEED_LED_POSITIONS[i];
+    if (ledIndex < NUM_LEDS)
+    {
+      // Check if this LED is already lit by brightness preview
+      if (leds[ledIndex] == brightnessColor)
+      {
+        // Mix colors for overlap (center LED and any other overlaps)
+        leds[ledIndex] = mixedColor;
+      }
+      else
+      {
+        leds[ledIndex] = speedColor;
+      }
+    }
+  }
+}
+
+void LEDDriver::renderWaveEffectOnClock()
+{
+  // Render a wave effect on the clock ring using rainbow palette
+  static unsigned long lastUpdate = 0;
+  static float wavePosition = 0.0f;
+
+  unsigned long currentTime = millis();
+  if (currentTime - lastUpdate > 50) // Update every 50ms
+  {
+    wavePosition += globalSpeed * 0.02f; // Speed affects wave movement
+    if (wavePosition >= 1.0f)
+    {
+      wavePosition -= 1.0f;
+    }
+    lastUpdate = currentTime;
+  }
+
+  // Apply wave effect to clock segment
+  const LEDSegment *clockSegment = segmentManager.getSegment(SEGMENT_CLOCK);
+  if (clockSegment)
+  {
+    for (uint16_t i = 0; i < clockSegment->count; i++)
+    {
+      float ledPosition = (float)i / (float)clockSegment->count;
+      float wavePhase = ledPosition + wavePosition;
+      if (wavePhase > 1.0f)
+        wavePhase -= 1.0f;
+
+      // Create rainbow wave
+      uint8_t hue = (uint8_t)(wavePhase * 255);
+      CHSV hsvColor(hue, 255, globalBrightness);
+      CRGB rgbColor;
+      hsv2rgb_rainbow(hsvColor, rgbColor);
+
+      uint16_t absoluteIndex = clockSegment->startIndex + i;
+      if (absoluteIndex < NUM_LEDS)
+      {
+        leds[absoluteIndex] = rgbColor;
+      }
+    }
+  }
+}
+
+// ============================================================================
+// POLE LED METHODS
+// ============================================================================
+
+void LEDDriver::setPolePixel(int index, CRGB color)
+{
+  if (index >= 0 && index < POLE_NUM_LEDS)
+  {
+    poleLeds[index] = color;
+  }
+}
+
+void LEDDriver::fillPole(CRGB color)
+{
+  fill_solid(poleLeds, POLE_NUM_LEDS, color);
+}
+
+void LEDDriver::clearPole()
+{
+  fill_solid(poleLeds, POLE_NUM_LEDS, CRGB::Black);
+}
+
+uint8_t LEDDriver::getPoleColumn(uint16_t index)
+{
+  return index % POLE_SPIRAL_REPEAT;
+}
+
+uint8_t LEDDriver::getPoleHeight(uint16_t index)
+{
+  return index / POLE_SPIRAL_REPEAT;
+}
+
+void LEDDriver::updatePole()
+{
+  static PoleColumnWavePattern *poleColumnWave = nullptr;
+  static PoleSpiralChasePattern *poleSpiralChase = nullptr;
+  static PoleHelixPattern *poleHelix = nullptr;
+  static PoleFirePattern *poleFire = nullptr;
+  static uint8_t currentPolePattern = 0;
+  static unsigned long lastPatternSwitch = 0;
+
+  unsigned long currentTime = millis();
+
+  // Initialize pole patterns on first run
+  if (poleColumnWave == nullptr)
+  {
+    poleColumnWave = new PoleColumnWavePattern(leds, NUM_LEDS, poleLeds, POLE_NUM_LEDS);
+    poleSpiralChase = new PoleSpiralChasePattern(leds, NUM_LEDS, poleLeds, POLE_NUM_LEDS);
+    poleHelix = new PoleHelixPattern(leds, NUM_LEDS, poleLeds, POLE_NUM_LEDS);
+    poleFire = new PoleFirePattern(leds, NUM_LEDS, poleLeds, POLE_NUM_LEDS);
+
+    // Set initial pattern properties
+    poleColumnWave->setActive(true);
+    poleColumnWave->setBrightness(globalBrightness);
+    poleColumnWave->setSpeed(globalSpeed);
+  }
+
+  // Switch between pole patterns every 10 seconds
+  if (currentTime - lastPatternSwitch > 10000)
+  {
+    // Deactivate current pattern
+    switch (currentPolePattern)
+    {
+    case 0:
+      poleColumnWave->setActive(false);
+      break;
+    case 1:
+      poleSpiralChase->setActive(false);
+      break;
+    case 2:
+      poleHelix->setActive(false);
+      break;
+    case 3:
+      poleFire->setActive(false);
+      break;
+    }
+
+    // Move to next pattern
+    currentPolePattern = (currentPolePattern + 1) % 4;
+
+    // Activate new pattern
+    switch (currentPolePattern)
+    {
+    case 0:
+      poleColumnWave->setActive(true);
+      poleColumnWave->setBrightness(globalBrightness);
+      poleColumnWave->setSpeed(globalSpeed);
+      Serial.println("Pole: Column Wave Pattern");
+      break;
+    case 1:
+      poleSpiralChase->setActive(true);
+      poleSpiralChase->setBrightness(globalBrightness);
+      poleSpiralChase->setSpeed(globalSpeed);
+      Serial.println("Pole: Spiral Chase Pattern");
+      break;
+    case 2:
+      poleHelix->setActive(true);
+      poleHelix->setBrightness(globalBrightness);
+      poleHelix->setSpeed(globalSpeed);
+      Serial.println("Pole: Helix Pattern");
+      break;
+    case 3:
+      poleFire->setActive(true);
+      poleFire->setBrightness(globalBrightness);
+      poleFire->setSpeed(globalSpeed);
+      Serial.println("Pole: Fire Pattern");
+      break;
+    }
+
+    lastPatternSwitch = currentTime;
+  }
+
+  // Update current pattern
+  bool updated = false;
+  switch (currentPolePattern)
+  {
+  case 0:
+    updated = poleColumnWave->update(currentTime);
+    break;
+  case 1:
+    updated = poleSpiralChase->update(currentTime);
+    break;
+  case 2:
+    updated = poleHelix->update(currentTime);
+    break;
+  case 3:
+    updated = poleFire->update(currentTime);
+    break;
+  }
+
+  // Update pattern properties if global settings changed
+  switch (currentPolePattern)
+  {
+  case 0:
+    poleColumnWave->setBrightness(globalBrightness);
+    poleColumnWave->setSpeed(globalSpeed);
+    break;
+  case 1:
+    poleSpiralChase->setBrightness(globalBrightness);
+    poleSpiralChase->setSpeed(globalSpeed);
+    break;
+  case 2:
+    poleHelix->setBrightness(globalBrightness);
+    poleHelix->setSpeed(globalSpeed);
+    break;
+  case 3:
+    poleFire->setBrightness(globalBrightness);
+    poleFire->setSpeed(globalSpeed);
+    break;
+  }
+}
+
+// ============================================================================
+// FIREWORK MODE IMPLEMENTATION
+// ============================================================================
+
+void LEDDriver::enterFireworkMode(unsigned long currentTime)
+{
+  inFireworkMode = true;
+  fireworkModeStartTime = currentTime;
+  lastJoystickUpState = false;
+
+  Serial.println("Entered Firework Mode! Move joystick UP to launch fireworks.");
+  Serial.println("Mode will auto-exit after 30 seconds or single-click to exit.");
+}
+
+void LEDDriver::exitFireworkMode()
+{
+  inFireworkMode = false;
+
+  // Clean up all active fireworks
+  for (int i = 0; i < MAX_ACTIVE_FIREWORKS; i++)
+  {
+    if (activeFireworks[i] != nullptr)
+    {
+      delete activeFireworks[i];
+      activeFireworks[i] = nullptr;
+    }
+  }
+  activeFireworkCount = 0;
+
+  Serial.println("Exited Firework Mode");
+}
+
+void LEDDriver::processFireworkMode()
+{
+  unsigned long currentTime = millis();
+
+  // Check for timeout
+  if (currentTime - fireworkModeStartTime > FIREWORK_MODE_TIMEOUT)
+  {
+    exitFireworkMode();
+    return;
+  }
+
+  // Check for joystick up motion to launch firework
+  bool joystickUp = (joystickState.y > (JOYSTICK_CENTER + FIREWORK_LAUNCH_THRESHOLD));
+
+  if (joystickUp && !lastJoystickUpState)
+  {
+    // Rising edge - launch firework
+    launchFirework(currentTime);
+  }
+  lastJoystickUpState = joystickUp;
+
+  // Update active fireworks
+  updateActiveFireworks(currentTime);
+
+  // Clean up completed fireworks
+  cleanupInactiveFireworks();
+
+  // Show the LEDs
+  show();
+}
+
+void LEDDriver::launchFirework(unsigned long currentTime)
+{
+  // Find an empty slot for new firework
+  for (int i = 0; i < MAX_ACTIVE_FIREWORKS; i++)
+  {
+    if (activeFireworks[i] == nullptr)
+    {
+      // Create new firework action
+      activeFireworks[i] = new FireworkAction(leds, NUM_LEDS, poleLeds, POLE_NUM_LEDS);
+      activeFireworks[i]->setBrightness(globalBrightness);
+      activeFireworks[i]->setSpeed(globalSpeed);
+      activeFireworks[i]->trigger(currentTime);
+
+      activeFireworkCount++;
+
+      Serial.print("Launched firework #");
+      Serial.print(i);
+      Serial.print(" (Active: ");
+      Serial.print(activeFireworkCount);
+      Serial.println(")");
+      break;
+    }
+  }
+}
+
+void LEDDriver::updateActiveFireworks(unsigned long currentTime)
+{
+  // Clear all LEDs first - fireworks will draw over this
+  fill_solid(leds, NUM_LEDS, CRGB::Black);
+  if (poleLeds)
+  {
+    fill_solid(poleLeds, POLE_NUM_LEDS, CRGB::Black);
+  }
+
+  // Update all active fireworks
+  for (int i = 0; i < MAX_ACTIVE_FIREWORKS; i++)
+  {
+    if (activeFireworks[i] != nullptr && activeFireworks[i]->getActive())
+    {
+      activeFireworks[i]->update(currentTime);
+    }
+  }
+}
+
+void LEDDriver::cleanupInactiveFireworks()
+{
+  for (int i = 0; i < MAX_ACTIVE_FIREWORKS; i++)
+  {
+    if (activeFireworks[i] != nullptr && activeFireworks[i]->getComplete())
+    {
+      delete activeFireworks[i];
+      activeFireworks[i] = nullptr;
+      activeFireworkCount--;
+
+      Serial.print("Cleaned up completed firework #");
+      Serial.print(i);
+      Serial.print(" (Active: ");
+      Serial.print(activeFireworkCount);
+      Serial.println(")");
+    }
+  }
 }

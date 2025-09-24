@@ -2,23 +2,40 @@
 #define CONFIG_H
 
 // LED Configuration
-#define NUM_LEDS 163     // Total LED count (62 Eye + 101 Clock)
+#define NUM_LEDS 162     // Total LED count (61 Eye + 101 Clock)
 #define DATA_PIN 13      // GPIO pin connected to LED data line
 #define LED_TYPE WS2812B // Change if using different LED type (APA102, WS2811, etc.)
 #define COLOR_ORDER GRB  // Color order for your LED strip
 
+// Pole LED Configuration
+#define POLE_NUM_LEDS 300 // Total LEDs in pole spiral strip
+#define POLE_DATA_PIN 2   // GPIO pin connected to pole LED data line
+#define POLE_LED_TYPE WS2812B
+#define POLE_COLOR_ORDER GRB
+
+// Pole Spiral Geometry
+#define POLE_SPIRAL_REPEAT 13                                                                   // LEDs per spiral revolution (every 13 LEDs = same column)
+#define POLE_SPIRAL_REVOLUTIONS ((POLE_NUM_LEDS + POLE_SPIRAL_REPEAT - 1) / POLE_SPIRAL_REPEAT) // ~23 revolutions
+#define POLE_HALF_COLUMN_OFFSET 7                                                               // LED 7 is ~half way around from LED 0 (opposite side)
+#define POLE_HEIGHT_LEVELS (POLE_SPIRAL_REVOLUTIONS)                                            // Height levels for vertical effects
+
+// Joystick Configuration
+#define JOYSTICK_X_PIN 34     // GPIO34 (ADC1_CH6) for X-axis
+#define JOYSTICK_Y_PIN 35     // GPIO35 (ADC1_CH7) for Y-axis
+#define JOYSTICK_BUTTON_PIN 4 // GPIO4 for joystick button
+
 // LED Segment Configuration
 // Data flow: EYE_4 (outer) -> EYE_3 -> EYE_2 -> EYE_1 -> EYE_0 (center) -> CLOCK
-#define EYE_TOTAL_LEDS 62    // Total LEDs in all eye rings
+#define EYE_TOTAL_LEDS 61    // Total LEDs in all eye rings
 #define CLOCK_TOTAL_LEDS 101 // Total LEDs in clock ring
 
 // Eye Ring Definitions (LED indices)
-#define EYE_4_START 0  // Outermost eye ring start
+#define EYE_4_START 0  // Outermost eye ring startpio
 #define EYE_4_COUNT 24 // LEDs in ring 4
 #define EYE_4_END (EYE_4_START + EYE_4_COUNT - 1)
 
 #define EYE_3_START (EYE_4_END + 1) // Ring 3 start
-#define EYE_3_COUNT 18              // LEDs in ring 3
+#define EYE_3_COUNT 16              // LEDs in ring 3
 #define EYE_3_END (EYE_3_START + EYE_3_COUNT - 1)
 
 #define EYE_2_START (EYE_3_END + 1) // Ring 2 start
@@ -26,7 +43,7 @@
 #define EYE_2_END (EYE_2_START + EYE_2_COUNT - 1)
 
 #define EYE_1_START (EYE_2_END + 1) // Ring 1 start
-#define EYE_1_COUNT 6               // LEDs in ring 1
+#define EYE_1_COUNT 8               // LEDs in ring 1
 #define EYE_1_END (EYE_1_START + EYE_1_COUNT - 1)
 
 #define EYE_0_START (EYE_1_END + 1) // Center LED (ring 0)
@@ -54,6 +71,38 @@
 #define ENABLE_SEGMENT_DEBUG true  // Enable segment debugging output
 #define SEGMENT_TEST_INTERVAL 2000 // Segment test cycle interval (ms)
 
+// Brightness and Speed Mode Settings
+#define BRIGHTNESS_LEVELS 10 // Number of brightness levels (1-10)
+#define SPEED_LEVELS 10      // Number of speed levels (1-10)
+
+// Brightness preview LEDs (vertical column in eye rings)
+#define BRIGHTNESS_PREVIEW_LEDS 9
+const uint16_t BRIGHTNESS_LED_POSITIONS[BRIGHTNESS_PREVIEW_LEDS] = {
+    12, // EYE_4 bottom
+    32, // EYE_3 bottom
+    46, // EYE_2 bottom
+    56, // EYE_1 bottom
+    60, // EYE_0 center
+    52, // EYE_1 top
+    40, // EYE_2 top
+    24, // EYE_3 top
+    0   // EYE_4 top
+};
+
+// Speed preview LEDs (horizontal line in eye rings)
+#define SPEED_PREVIEW_LEDS 9
+const uint16_t SPEED_LED_POSITIONS[SPEED_PREVIEW_LEDS] = {
+    6,  // EYE_4 left
+    28, // EYE_3 left
+    43, // EYE_2 left
+    54, // EYE_1 left
+    60, // EYE_0 center
+    58, // EYE_1 right
+    49, // EYE_2 right
+    36, // EYE_3 right
+    18  // EYE_4 right
+};
+
 // Brightness settings (0-255)
 #define DEFAULT_BRIGHTNESS 50
 #define MAX_BRIGHTNESS 255
@@ -67,7 +116,7 @@
 #define ENABLE_POWER_LIMITING true // Enable/disable power limiting feature
 
 // WiFi Access Point Configuration
-#define ENABLE_WIFI_AP true         // Enable/disable WiFi access point
+#define ENABLE_WIFI_AP false        // Enable/disable WiFi access point
 #define WIFI_AP_SSID "CLOCK"        // WiFi network name (SSID)
 #define WIFI_AP_PASSWORD "$pankm3!" // WiFi password (min 8 characters)
 #define WIFI_AP_CHANNEL 1           // WiFi channel (1-13)
@@ -76,14 +125,9 @@
 #define WEB_UPDATE_INTERVAL 1000    // Web status update interval (ms)
 
 // Captive Portal Configuration
-#define ENABLE_CAPTIVE_PORTAL true         // Enable captive portal functionality
+#define ENABLE_CAPTIVE_PORTAL false        // Enable captive portal functionality
 #define DNS_SERVER_PORT 53                 // DNS server port for captive portal
 #define CAPTIVE_PORTAL_TITLE "Clock Totem" // Title shown in captive portal
-
-// Joystick Configuration
-#define JOYSTICK_X_PIN 34     // GPIO34 (ADC1_CH6) for X-axis
-#define JOYSTICK_Y_PIN 35     // GPIO35 (ADC1_CH7) for Y-axis
-#define JOYSTICK_BUTTON_PIN 4 // GPIO4 for joystick button
 
 // Joystick calibration values
 #define JOYSTICK_MIN 0        // Minimum ADC value (12-bit ADC)
@@ -101,15 +145,22 @@
 #define STATIC_COLOR_B 100
 
 // Mode definitions
-#define MODE_MAIN 0        // Main mode - shows selected pattern + palette
-#define MODE_SETTINGS 1    // Settings mode - quadrant-based interface
-#define MODE_POINTER 2     // Pointer mode - red background with chase pointer
-#define MODE_PATTERN 3     // Pattern browse mode - joystick controls pattern/palette
-#define MODE_CALIBRATION 4 // Joystick calibration mode
-#define NUM_MODES 3        // Total number of normal modes for single-click cycling (Main, Pointer, Pattern)
+#define MODE_SETTINGS 0         // Settings mode - quadrant-based interface (not in cycle)
+#define MODE_PATTERN 1          // Pattern/Palette explore mode - joystick controls pattern/palette
+#define MODE_EYE 2              // Eye mode - shows patterns on clock, eye tracking when joystick active
+#define MODE_FIREWORK 3         // Firework mode - triple-click activated, joystick up launches fireworks
+#define MODE_BRIGHTNESS_SPEED 4 // Combined mode - up/down brightness, left/right speed
+#define MODE_CALIBRATION 5      // Joystick calibration mode
+#define NUM_MODES 2             // Number of modes in normal cycle (Pattern/Eye toggle only)
 
 // Joystick sensitivity settings
-#define BUTTON_DEBOUNCE_MS 200 // Button debounce time
+#define BUTTON_DEBOUNCE_MS 200   // Button debounce time
+#define TRIPLE_CLICK_TIMEOUT 600 // Triple-click detection timeout (ms)
+
+// Firework mode settings
+#define MAX_ACTIVE_FIREWORKS 5        // Maximum simultaneous firework instances
+#define FIREWORK_LAUNCH_THRESHOLD 200 // Joystick Y threshold to launch firework
+#define FIREWORK_MODE_TIMEOUT 30000   // Auto-exit firework mode after 30 seconds
 
 // Pointer mode settings
 #define POINTER_LED_COUNT 3    // Number of LEDs to light up in pointer mode (deprecated - use width)
@@ -138,7 +189,7 @@
 #define SETTINGS_BRIGHTNESS_MIN 1     // Minimum global brightness
 #define SETTINGS_BRIGHTNESS_MAX 255   // Maximum global brightness
 #define SETTINGS_SPEED_MIN 1.0f       // Minimum global speed
-#define SETTINGS_SPEED_MAX 10.0f      // Maximum global speed
+#define SETTINGS_SPEED_MAX 5.0f       // Maximum global speed
 #define DEFAULT_GLOBAL_SPEED 1.0f     // Default global speed
 #define DEFAULT_GLOBAL_BRIGHTNESS 128 // Default global brightness (50% of max)
 #define SETTINGS_MAX_ITEMS 12         // Maximum items to display (patterns/palettes/speeds)

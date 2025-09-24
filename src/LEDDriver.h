@@ -5,6 +5,7 @@
 #include "config.h"
 #include "PatternManager.h"
 #include "SegmentManager.h"
+#include "EyeRenderer.h"
 
 /**
  * @brief Custom LED Driver class for ESP32 with FastLED
@@ -15,10 +16,11 @@
 class LEDDriver
 {
 private:
-  CRGB leds[NUM_LEDS];      // LED array
-  uint8_t brightness;       // Current brightness level
-  unsigned long lastUpdate; // Last update timestamp
-  bool needsUpdate;         // Flag to indicate if display needs refresh
+  CRGB leds[NUM_LEDS];          // Main LED array (Eye + Clock)
+  CRGB poleLeds[POLE_NUM_LEDS]; // Pole LED array
+  uint8_t brightness;           // Current brightness level
+  unsigned long lastUpdate;     // Last update timestamp
+  bool needsUpdate;             // Flag to indicate if display needs refresh
 
   // Current mode
   uint8_t currentMode;
@@ -91,12 +93,34 @@ private:
   // Segment manager for multi-ring operations
   SegmentManager segmentManager;
 
+  // Eye renderer for pointer mode
+  EyeRenderer *eyeRenderer;
+
+  // Action Pattern system for fireworks
+  ActionPattern *activeFireworks[MAX_ACTIVE_FIREWORKS];
+  int activeFireworkCount;
+
+  // Firework mode state
+  bool inFireworkMode;
+  unsigned long fireworkModeStartTime;
+  bool lastJoystickUpState;
+
   // Private mode processing methods
   void processMainMode();
   void processSettingsMode();
-  void processPointerMode();
+  void processEyeMode();
   void processPatternMode();
+  void processFireworkMode();
+  void processBrightnessSpeedMode();
   void processCalibrationMode();
+
+  // Firework mode helper methods
+  bool detectTripleClick(unsigned long currentTime);
+  void enterFireworkMode(unsigned long currentTime);
+  void exitFireworkMode();
+  void launchFirework(unsigned long currentTime);
+  void updateActiveFireworks(unsigned long currentTime);
+  void cleanupInactiveFireworks();
 
   // Settings mode helper methods
   void processSettingsPhase1();
@@ -110,6 +134,12 @@ private:
   void renderQuadrantPointer();
   void renderPhase2Pointer();
   int getCurrentSettingPosition(); // Get current setting position for default display
+
+  // Brightness and Speed mode helpers
+  void renderBrightnessPreview(uint8_t level);
+  void renderSpeedPreview(uint8_t level);
+  void renderCombinedPreview(uint8_t brightnessLevel, uint8_t speedLevel);
+  void renderWaveEffectOnClock();
   int determineQuadrant(int x, int y);
   int determineClockPosition(int x, int y);
   void startHolding(int quadrant);
@@ -264,6 +294,57 @@ public:
    * @return Total number of LEDs
    */
   int getNumLEDs() const { return NUM_LEDS; }
+
+  /**
+   * @brief Get number of pole LEDs
+   * @return Total number of pole LEDs
+   */
+  int getPoleNumLEDs() const { return POLE_NUM_LEDS; }
+
+  // Pole LED methods
+  /**
+   * @brief Set color of specific pole LED
+   * @param index LED index (0 to POLE_NUM_LEDS-1)
+   * @param color RGB color
+   */
+  void setPolePixel(int index, CRGB color);
+
+  /**
+   * @brief Fill all pole LEDs with solid color
+   * @param color RGB color to fill
+   */
+  void fillPole(CRGB color);
+
+  /**
+   * @brief Clear all pole LEDs (set to black)
+   */
+  void clearPole();
+
+  /**
+   * @brief Update pole patterns
+   */
+  void updatePole();
+
+  /**
+   * @brief Create firework pattern with pole access
+   * @return Pointer to firework pattern with pole LED access
+   */
+  Pattern *createFireworkPattern();
+
+  // Pole geometry helper methods
+  /**
+   * @brief Get spiral column for LED index
+   * @param index LED index (0 to POLE_NUM_LEDS-1)
+   * @return Column position (0 to POLE_SPIRAL_REPEAT-1)
+   */
+  uint8_t getPoleColumn(uint16_t index);
+
+  /**
+   * @brief Get spiral height level for LED index
+   * @param index LED index (0 to POLE_NUM_LEDS-1)
+   * @return Height level (0 to POLE_HEIGHT_LEVELS-1)
+   */
+  uint8_t getPoleHeight(uint16_t index);
 
   /**
    * @brief Get current mode

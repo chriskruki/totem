@@ -10,6 +10,98 @@
 class ColorPalette;
 class SegmentManager;
 
+// ============================================================================
+// ACTION PATTERN SYSTEM
+// ============================================================================
+
+/**
+ * @brief Base class for one-time triggerable actions
+ *
+ * ActionPatterns are different from regular patterns - they are triggered once
+ * and run to completion, then become inactive. Multiple instances can run simultaneously.
+ */
+class ActionPattern
+{
+protected:
+  CRGB *leds;      // Pointer to main LED array
+  int numLeds;     // Number of main LEDs
+  CRGB *poleLeds;  // Pointer to pole LED array (optional)
+  int poleNumLeds; // Number of pole LEDs
+
+  unsigned long startTime;      // When this action was triggered
+  unsigned long lastUpdate;     // Last update time
+  unsigned long updateInterval; // Update interval in milliseconds
+  bool isActive;                // Is this action currently running
+  bool isComplete;              // Has this action finished
+  uint8_t brightness;           // Action brightness (0-255)
+  float speed;                  // Action speed multiplier
+
+public:
+  /**
+   * @brief Constructor for ActionPattern
+   * @param leds Pointer to main LED array
+   * @param numLeds Number of main LEDs
+   * @param poleLeds Pointer to pole LED array (optional)
+   * @param poleNumLeds Number of pole LEDs
+   * @param updateInterval Update interval in milliseconds
+   */
+  ActionPattern(CRGB *leds, int numLeds, CRGB *poleLeds = nullptr, int poleNumLeds = 0, unsigned long updateInterval = 16);
+
+  /**
+   * @brief Virtual destructor
+   */
+  virtual ~ActionPattern() = default;
+
+  /**
+   * @brief Trigger this action to start
+   * @param currentTime Current time in milliseconds
+   */
+  virtual void trigger(unsigned long currentTime);
+
+  /**
+   * @brief Update the action - must be implemented by derived classes
+   * @param currentTime Current time in milliseconds
+   * @return true if action was updated, false otherwise
+   */
+  virtual bool update(unsigned long currentTime) = 0;
+
+  /**
+   * @brief Check if action is currently active
+   * @return true if active, false otherwise
+   */
+  bool getActive() const { return isActive; }
+
+  /**
+   * @brief Check if action has completed
+   * @return true if complete, false otherwise
+   */
+  bool getComplete() const { return isComplete; }
+
+  /**
+   * @brief Set action brightness
+   * @param brightness Brightness value (0-255)
+   */
+  virtual void setBrightness(uint8_t brightness) { this->brightness = brightness; }
+
+  /**
+   * @brief Set action speed
+   * @param speed Speed multiplier
+   */
+  virtual void setSpeed(float speed) { this->speed = speed; }
+
+  /**
+   * @brief Get action name
+   * @return Action name as String
+   */
+  virtual String getName() const = 0;
+
+  /**
+   * @brief Get action description
+   * @return Action description as String
+   */
+  virtual String getDescription() const = 0;
+};
+
 /**
  * @brief Base class for all LED patterns
  *
@@ -339,6 +431,184 @@ public:
   void setSegmentInterval(unsigned long interval);
   String getName() const override { return "SegmentTest"; }
   String getDescription() const override { return "Test pattern for segment verification"; }
+};
+
+// ============================================================================
+// POLE-SPECIFIC PATTERNS
+// ============================================================================
+
+/**
+ * @brief Base class for pole-specific patterns
+ *
+ * Provides helper methods for pole spiral geometry calculations
+ */
+class PolePattern : public Pattern
+{
+protected:
+  CRGB *poleLeds;  // Pointer to pole LED array
+  int poleNumLeds; // Number of pole LEDs
+
+  /**
+   * @brief Get spiral column for LED index
+   * @param index LED index (0 to POLE_NUM_LEDS-1)
+   * @return Column position (0 to POLE_SPIRAL_REPEAT-1)
+   */
+  uint8_t getPoleColumn(uint16_t index) const;
+
+  /**
+   * @brief Get spiral height level for LED index
+   * @param index LED index (0 to POLE_NUM_LEDS-1)
+   * @return Height level (0 to POLE_HEIGHT_LEVELS-1)
+   */
+  uint8_t getPoleHeight(uint16_t index) const;
+
+  /**
+   * @brief Get LED index for specific column and height
+   * @param column Column (0 to POLE_SPIRAL_REPEAT-1)
+   * @param height Height level (0 to POLE_HEIGHT_LEVELS-1)
+   * @return LED index, or -1 if invalid
+   */
+  int getPoleIndex(uint8_t column, uint8_t height) const;
+
+public:
+  PolePattern(CRGB *leds, int numLeds, CRGB *poleLeds, int poleNumLeds, unsigned long updateInterval = 50);
+  virtual ~PolePattern() = default;
+};
+
+/**
+ * @brief Column wave pattern for pole
+ *
+ * Creates waves that travel up columns (LED 0,13,26,39... for column 0, etc.)
+ */
+class PoleColumnWavePattern : public PolePattern
+{
+private:
+  float wavePosition;    // Current wave position (0.0 to POLE_SPIRAL_REPEAT)
+  uint8_t waveWidth;     // Width of wave in columns
+  bool reverseDirection; // Wave direction (up/down)
+
+public:
+  PoleColumnWavePattern(CRGB *leds, int numLeds, CRGB *poleLeds, int poleNumLeds);
+  bool update(unsigned long currentTime) override;
+  String getName() const override { return "PoleColumnWave"; }
+  String getDescription() const override { return "Column waves traveling up the pole"; }
+};
+
+/**
+ * @brief Spiral chase pattern for pole
+ *
+ * Creates a chase effect that follows the physical spiral geometry
+ */
+class PoleSpiralChasePattern : public PolePattern
+{
+private:
+  float chasePosition; // Current chase position
+  uint8_t chaseLength; // Length of chase tail
+  uint8_t hueShift;    // Color cycling
+
+public:
+  PoleSpiralChasePattern(CRGB *leds, int numLeds, CRGB *poleLeds, int poleNumLeds);
+  bool update(unsigned long currentTime) override;
+  String getName() const override { return "PoleSpiralChase"; }
+  String getDescription() const override { return "Chase effect following spiral geometry"; }
+};
+
+/**
+ * @brief Helix pattern for pole
+ *
+ * Creates multiple helical waves around the pole
+ */
+class PoleHelixPattern : public PolePattern
+{
+private:
+  float helixPhase;   // Current helix phase
+  uint8_t numHelixes; // Number of parallel helixes
+  float helixSpeed;   // Speed of helix rotation
+
+public:
+  PoleHelixPattern(CRGB *leds, int numLeds, CRGB *poleLeds, int poleNumLeds);
+  bool update(unsigned long currentTime) override;
+  String getName() const override { return "PoleHelix"; }
+  String getDescription() const override { return "Multiple helical waves around pole"; }
+};
+
+/**
+ * @brief Fire effect for pole
+ *
+ * Creates a fire effect that travels up the pole
+ */
+class PoleFirePattern : public PolePattern
+{
+private:
+  uint8_t heat[POLE_NUM_LEDS]; // Heat map for fire effect
+  uint8_t cooling;             // Cooling rate
+  uint8_t sparking;            // Sparking probability
+
+public:
+  PoleFirePattern(CRGB *leds, int numLeds, CRGB *poleLeds, int poleNumLeds);
+  bool update(unsigned long currentTime) override;
+  String getName() const override { return "PoleFire"; }
+  String getDescription() const override { return "Fire effect traveling up pole"; }
+};
+
+/**
+ * @brief Firework action - one-time triggerable firework effect
+ *
+ * Creates a complete firework effect: white trail up pole, rainbow explosion from center outward, sparkly remnants
+ * This is an ActionPattern that runs once when triggered and then becomes inactive
+ */
+class FireworkAction : public ActionPattern
+{
+private:
+  // Action phases
+  enum FireworkPhase
+  {
+    PHASE_LAUNCH,    // White trail traveling up pole
+    PHASE_EXPLOSION, // Rainbow cascade from eye center to clock
+    PHASE_SPARKLES   // Lingering sparkly remnants
+  };
+
+  FireworkPhase currentPhase;
+  unsigned long phaseStartTime;
+
+  // Launch phase (pole)
+  float launchPosition;                         // Position of launch trail (0.0 to 1.0)
+  static const uint32_t LAUNCH_DURATION = 1000; // 1 second launch time
+
+  // Explosion phase (eye rings + clock)
+  float explosionRadius;                          // Current explosion radius
+  uint8_t explosionHue;                           // Current hue for rainbow effect
+  static const uint32_t EXPLOSION_DURATION = 800; // Explosion animation time
+
+  // Sparkle phase
+  struct Sparkle
+  {
+    uint16_t ledIndex; // LED position
+    uint8_t intensity; // Current brightness
+    uint8_t hue;       // Sparkle color
+    uint8_t decayRate; // How fast it fades
+    bool active;       // Is this sparkle active
+  };
+
+  static const int MAX_SPARKLES = 30; // Reduced for multiple instances
+  Sparkle sparkles[MAX_SPARKLES];
+  static const uint32_t SPARKLE_DURATION = 3000; // 3 seconds of sparkles
+
+  // Helper methods
+  void updateLaunchPhase(unsigned long currentTime);
+  void updateExplosionPhase(unsigned long currentTime);
+  void updateSparklePhase(unsigned long currentTime);
+  void initializeSparkles();
+  void addRandomSparkles(int count);
+  float getDistanceFromCenter(uint16_t ledIndex);
+  uint16_t getRandomEyeOrClockLED();
+
+public:
+  FireworkAction(CRGB *leds, int numLeds, CRGB *poleLeds = nullptr, int poleNumLeds = 0);
+  void trigger(unsigned long currentTime) override;
+  bool update(unsigned long currentTime) override;
+  String getName() const override { return "FireworkAction"; }
+  String getDescription() const override { return "One-time firework launch and explosion"; }
 };
 
 #endif // PATTERN_H

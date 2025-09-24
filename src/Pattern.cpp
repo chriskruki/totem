@@ -847,3 +847,648 @@ void SegmentTestPattern::setSegmentInterval(unsigned long interval)
 {
   segmentInterval = constrain(interval, 500, 10000);
 }
+
+// ============================================================================
+// POLE PATTERN IMPLEMENTATIONS
+// ============================================================================
+
+// Base PolePattern class implementation
+PolePattern::PolePattern(CRGB *leds, int numLeds, CRGB *poleLeds, int poleNumLeds, unsigned long updateInterval)
+    : Pattern(leds, numLeds, updateInterval), poleLeds(poleLeds), poleNumLeds(poleNumLeds)
+{
+}
+
+uint8_t PolePattern::getPoleColumn(uint16_t index) const
+{
+  return index % POLE_SPIRAL_REPEAT;
+}
+
+uint8_t PolePattern::getPoleHeight(uint16_t index) const
+{
+  return index / POLE_SPIRAL_REPEAT;
+}
+
+int PolePattern::getPoleIndex(uint8_t column, uint8_t height) const
+{
+  if (column >= POLE_SPIRAL_REPEAT || height >= POLE_HEIGHT_LEVELS)
+  {
+    return -1; // Invalid position
+  }
+
+  int index = height * POLE_SPIRAL_REPEAT + column;
+  return (index < poleNumLeds) ? index : -1;
+}
+
+// PoleColumnWavePattern implementation
+PoleColumnWavePattern::PoleColumnWavePattern(CRGB *leds, int numLeds, CRGB *poleLeds, int poleNumLeds)
+    : PolePattern(leds, numLeds, poleLeds, poleNumLeds, 50),
+      wavePosition(0.0f),
+      waveWidth(3),
+      reverseDirection(false)
+{
+}
+
+bool PoleColumnWavePattern::update(unsigned long currentTime)
+{
+  if (!isActive || (currentTime - lastUpdate) < updateInterval)
+  {
+    return false;
+  }
+
+  // Clear pole LEDs
+  fill_solid(poleLeds, poleNumLeds, CRGB::Black);
+
+  // Update wave position
+  wavePosition += speed * 0.5f;
+  if (wavePosition >= POLE_SPIRAL_REPEAT)
+  {
+    wavePosition = 0.0f;
+    reverseDirection = !reverseDirection; // Change direction at each cycle
+  }
+
+  // Create column wave effect
+  for (uint8_t col = 0; col < POLE_SPIRAL_REPEAT; col++)
+  {
+    // Calculate distance from wave center
+    float distanceFromWave = abs((float)col - wavePosition);
+    if (distanceFromWave > POLE_SPIRAL_REPEAT / 2)
+    {
+      distanceFromWave = POLE_SPIRAL_REPEAT - distanceFromWave; // Wrap around
+    }
+
+    // Calculate wave intensity
+    float intensity = 0.0f;
+    if (distanceFromWave <= waveWidth)
+    {
+      intensity = 1.0f - (distanceFromWave / waveWidth);
+    }
+
+    if (intensity > 0.0f)
+    {
+      // Light up all LEDs in this column
+      for (uint8_t height = 0; height < POLE_HEIGHT_LEVELS; height++)
+      {
+        int ledIndex = getPoleIndex(col, height);
+        if (ledIndex >= 0)
+        {
+          // Create rainbow colors based on column and height
+          uint8_t hue = (col * 20 + height * 5 + (uint8_t)(currentTime / 50)) % 255;
+          uint8_t sat = 255;
+          uint8_t val = (uint8_t)(intensity * brightness);
+
+          CHSV hsvColor(hue, sat, val);
+          CRGB rgbColor;
+          hsv2rgb_rainbow(hsvColor, rgbColor);
+
+          poleLeds[ledIndex] = rgbColor;
+        }
+      }
+    }
+  }
+
+  lastUpdate = currentTime;
+  return true;
+}
+
+// PoleSpiralChasePattern implementation
+PoleSpiralChasePattern::PoleSpiralChasePattern(CRGB *leds, int numLeds, CRGB *poleLeds, int poleNumLeds)
+    : PolePattern(leds, numLeds, poleLeds, poleNumLeds, 30),
+      chasePosition(0.0f),
+      chaseLength(20),
+      hueShift(0)
+{
+}
+
+bool PoleSpiralChasePattern::update(unsigned long currentTime)
+{
+  if (!isActive || (currentTime - lastUpdate) < updateInterval)
+  {
+    return false;
+  }
+
+  // Clear pole LEDs
+  fill_solid(poleLeds, poleNumLeds, CRGB::Black);
+
+  // Update chase position
+  chasePosition += speed * 2.0f;
+  if (chasePosition >= poleNumLeds)
+  {
+    chasePosition = 0.0f;
+  }
+
+  // Create chase effect
+  for (int i = 0; i < chaseLength; i++)
+  {
+    int ledIndex = (int)(chasePosition - i);
+    if (ledIndex < 0)
+      ledIndex += poleNumLeds; // Wrap around
+    if (ledIndex >= poleNumLeds)
+      ledIndex -= poleNumLeds;
+
+    // Calculate fade based on position in chase tail
+    float fade = 1.0f - ((float)i / (float)chaseLength);
+
+    // Calculate hue based on position and time
+    uint8_t hue = (hueShift + ledIndex * 2) % 255;
+    uint8_t sat = 255;
+    uint8_t val = (uint8_t)(fade * brightness);
+
+    CHSV hsvColor(hue, sat, val);
+    CRGB rgbColor;
+    hsv2rgb_rainbow(hsvColor, rgbColor);
+
+    poleLeds[ledIndex] = rgbColor;
+  }
+
+  // Advance hue shift for color cycling
+  hueShift += 2;
+
+  lastUpdate = currentTime;
+  return true;
+}
+
+// PoleHelixPattern implementation
+PoleHelixPattern::PoleHelixPattern(CRGB *leds, int numLeds, CRGB *poleLeds, int poleNumLeds)
+    : PolePattern(leds, numLeds, poleLeds, poleNumLeds, 40),
+      helixPhase(0.0f),
+      numHelixes(3),
+      helixSpeed(0.1f)
+{
+}
+
+bool PoleHelixPattern::update(unsigned long currentTime)
+{
+  if (!isActive || (currentTime - lastUpdate) < updateInterval)
+  {
+    return false;
+  }
+
+  // Clear pole LEDs
+  fill_solid(poleLeds, poleNumLeds, CRGB::Black);
+
+  // Update helix phase
+  helixPhase += speed * helixSpeed;
+  if (helixPhase >= 2.0f * PI)
+  {
+    helixPhase -= 2.0f * PI;
+  }
+
+  // Create multiple helixes
+  for (uint8_t helix = 0; helix < numHelixes; helix++)
+  {
+    float helixOffset = (2.0f * PI * helix) / numHelixes;
+
+    for (uint16_t i = 0; i < poleNumLeds; i++)
+    {
+      uint8_t height = getPoleHeight(i);
+      uint8_t column = getPoleColumn(i);
+
+      // Calculate helix position
+      float helixPos = helixPhase + helixOffset + (height * 0.3f);
+      float expectedColumn = (sin(helixPos) + 1.0f) * (POLE_SPIRAL_REPEAT / 2.0f);
+
+      // Check if this LED is close to the helix path
+      float columnDistance = abs(column - expectedColumn);
+      if (columnDistance > POLE_SPIRAL_REPEAT / 2)
+      {
+        columnDistance = POLE_SPIRAL_REPEAT - columnDistance; // Wrap around
+      }
+
+      if (columnDistance <= 1.5f)
+      {
+        // Calculate intensity based on distance from helix center
+        float intensity = 1.0f - (columnDistance / 1.5f);
+
+        // Calculate color based on helix and height
+        uint8_t hue = (helix * 85 + height * 5 + (uint8_t)(currentTime / 100)) % 255;
+        uint8_t sat = 255;
+        uint8_t val = (uint8_t)(intensity * brightness);
+
+        CHSV hsvColor(hue, sat, val);
+        CRGB rgbColor;
+        hsv2rgb_rainbow(hsvColor, rgbColor);
+
+        poleLeds[i] = rgbColor;
+      }
+    }
+  }
+
+  lastUpdate = currentTime;
+  return true;
+}
+
+// PoleFirePattern implementation
+PoleFirePattern::PoleFirePattern(CRGB *leds, int numLeds, CRGB *poleLeds, int poleNumLeds)
+    : PolePattern(leds, numLeds, poleLeds, poleNumLeds, 30),
+      cooling(55),
+      sparking(120)
+{
+  // Initialize heat array
+  for (int i = 0; i < POLE_NUM_LEDS; i++)
+  {
+    heat[i] = 0;
+  }
+}
+
+bool PoleFirePattern::update(unsigned long currentTime)
+{
+  if (!isActive || (currentTime - lastUpdate) < updateInterval)
+  {
+    return false;
+  }
+
+  // Step 1: Cool down every cell a little
+  for (int i = 0; i < poleNumLeds; i++)
+  {
+    heat[i] = qsub8(heat[i], random8(0, ((cooling * 10) / poleNumLeds) + 2));
+  }
+
+  // Step 2: Heat from each cell drifts 'up' and diffuses a little
+  for (int k = poleNumLeds - 1; k >= 2; k--)
+  {
+    heat[k] = (heat[k - 1] + heat[k - 2] + heat[k - 2]) / 3;
+  }
+
+  // Step 3: Randomly ignite new 'sparks' at the bottom
+  if (random8() < sparking)
+  {
+    int y = random8(7);
+    heat[y] = qadd8(heat[y], random8(160, 255));
+  }
+
+  // Step 4: Map heat to LED colors
+  for (int j = 0; j < poleNumLeds; j++)
+  {
+    CRGB color = HeatColor(heat[j]);
+
+    // Scale brightness
+    color.nscale8(brightness);
+
+    poleLeds[j] = color;
+  }
+
+  lastUpdate = currentTime;
+  return true;
+}
+
+// ============================================================================
+// ACTION PATTERN IMPLEMENTATION
+// ============================================================================
+
+ActionPattern::ActionPattern(CRGB *leds, int numLeds, CRGB *poleLeds, int poleNumLeds, unsigned long updateInterval)
+    : leds(leds), numLeds(numLeds), poleLeds(poleLeds), poleNumLeds(poleNumLeds),
+      startTime(0), lastUpdate(0), updateInterval(updateInterval),
+      isActive(false), isComplete(false), brightness(255), speed(1.0f)
+{
+}
+
+void ActionPattern::trigger(unsigned long currentTime)
+{
+  startTime = currentTime;
+  lastUpdate = currentTime;
+  isActive = true;
+  isComplete = false;
+}
+
+// ============================================================================
+// FIREWORK ACTION IMPLEMENTATION
+// ============================================================================
+
+FireworkAction::FireworkAction(CRGB *leds, int numLeds, CRGB *poleLeds, int poleNumLeds)
+    : ActionPattern(leds, numLeds, poleLeds, poleNumLeds, 16), // 60+ FPS for smooth animation
+      currentPhase(PHASE_LAUNCH),
+      phaseStartTime(0),
+      launchPosition(0.0f),
+      explosionRadius(0.0f),
+      explosionHue(0)
+{
+  initializeSparkles();
+}
+
+void FireworkAction::trigger(unsigned long currentTime)
+{
+  ActionPattern::trigger(currentTime);
+  currentPhase = PHASE_LAUNCH;
+  phaseStartTime = currentTime;
+  launchPosition = 0.0f;
+  explosionRadius = 0.0f;
+  explosionHue = random8();
+  initializeSparkles();
+}
+
+bool FireworkAction::update(unsigned long currentTime)
+{
+  if (!isActive || (currentTime - lastUpdate) < updateInterval)
+  {
+    return false;
+  }
+
+  unsigned long phaseElapsed = currentTime - phaseStartTime;
+
+  // Update current phase
+  switch (currentPhase)
+  {
+  case PHASE_LAUNCH:
+    updateLaunchPhase(currentTime);
+    if (phaseElapsed >= LAUNCH_DURATION)
+    {
+      currentPhase = PHASE_EXPLOSION;
+      phaseStartTime = currentTime;
+      explosionRadius = 0.0f;
+    }
+    break;
+
+  case PHASE_EXPLOSION:
+    updateExplosionPhase(currentTime);
+    if (phaseElapsed >= EXPLOSION_DURATION)
+    {
+      currentPhase = PHASE_SPARKLES;
+      phaseStartTime = currentTime;
+      addRandomSparkles(MAX_SPARKLES); // Fill with initial sparkles
+    }
+    break;
+
+  case PHASE_SPARKLES:
+    updateSparklePhase(currentTime);
+    if (phaseElapsed >= SPARKLE_DURATION)
+    {
+      // Action is complete
+      isActive = false;
+      isComplete = true;
+      return false;
+    }
+    break;
+  }
+
+  lastUpdate = currentTime;
+  return true;
+}
+
+void FireworkAction::updateLaunchPhase(unsigned long currentTime)
+{
+  // Update launch position (0.0 = bottom, 1.0 = top of pole)
+  unsigned long phaseElapsed = currentTime - phaseStartTime;
+  launchPosition = (float)phaseElapsed / (float)LAUNCH_DURATION;
+
+  // Use actual pole LEDs if available
+  if (poleLeds && poleNumLeds > 0)
+  {
+    // Clear pole LEDs
+    fill_solid(poleLeds, poleNumLeds, CRGB::Black);
+
+    // Create white trail moving up the pole
+    int trailCenter = (int)(launchPosition * poleNumLeds);
+    int trailLength = 12; // Length of the trail
+
+    for (int i = 0; i < trailLength; i++)
+    {
+      int ledIndex = trailCenter - i;
+      if (ledIndex >= 0 && ledIndex < poleNumLeds)
+      {
+        // Brighter at head, dimmer at tail
+        uint8_t intensity = 255 - (i * 20);
+        poleLeds[ledIndex] = CRGB(intensity, intensity, intensity); // White trail
+      }
+    }
+  }
+  else
+  {
+    // Fallback: simulate on clock ring
+    int clockStart = CLOCK_START;
+    int clockCount = CLOCK_COUNT;
+
+    // Map launch position to clock LEDs (bottom to top simulation)
+    int trailCenter = (int)(launchPosition * clockCount);
+    int trailLength = 8; // Length of the trail
+
+    for (int i = 0; i < trailLength; i++)
+    {
+      int ledIndex = trailCenter - i;
+      if (ledIndex >= 0 && ledIndex < clockCount)
+      {
+        int absoluteIndex = clockStart + ledIndex;
+        if (absoluteIndex < numLeds)
+        {
+          // Brighter at head, dimmer at tail
+          uint8_t intensity = 255 - (i * 30);
+          leds[absoluteIndex] = CRGB(intensity, intensity, intensity); // White trail
+        }
+      }
+    }
+  }
+}
+
+void FireworkAction::updateExplosionPhase(unsigned long currentTime)
+{
+  unsigned long phaseElapsed = currentTime - phaseStartTime;
+  float progress = (float)phaseElapsed / (float)EXPLOSION_DURATION;
+
+  // Explosion radiates from center (EYE_0) outward
+  explosionRadius = progress * 6.0f; // 6 rings total (5 eye + 1 clock)
+
+  // Rainbow cascade effect
+  explosionHue = (explosionHue + 2) % 255; // Slowly shift hue
+
+  // Light up rings based on explosion radius
+  for (int ring = 0; ring < 6; ring++)
+  {
+    float ringDistance = (float)ring;
+
+    // Check if this ring should be lit
+    if (explosionRadius >= ringDistance)
+    {
+      // Calculate intensity based on how recently this ring was hit
+      float ringAge = explosionRadius - ringDistance;
+      float intensity = 1.0f - (ringAge / 2.0f); // Fade over 2 ring distances
+      intensity = max(0.0f, min(1.0f, intensity));
+
+      if (intensity > 0.0f)
+      {
+        // Calculate ring color (rainbow effect)
+        uint8_t ringHue = (explosionHue + ring * 40) % 255;
+        uint8_t ringBrightness = (uint8_t)(intensity * brightness);
+
+        CHSV hsvColor(ringHue, 255, ringBrightness);
+        CRGB rgbColor;
+        hsv2rgb_rainbow(hsvColor, rgbColor);
+
+        // Light up the appropriate ring
+        if (ring < 5)
+        {
+          // Eye rings (EYE_4 to EYE_0)
+          int segmentType = SEGMENT_EYE_4 + ring;
+          int startLED, count;
+
+          switch (segmentType)
+          {
+          case SEGMENT_EYE_4:
+            startLED = EYE_4_START;
+            count = EYE_4_COUNT;
+            break;
+          case SEGMENT_EYE_3:
+            startLED = EYE_3_START;
+            count = EYE_3_COUNT;
+            break;
+          case SEGMENT_EYE_2:
+            startLED = EYE_2_START;
+            count = EYE_2_COUNT;
+            break;
+          case SEGMENT_EYE_1:
+            startLED = EYE_1_START;
+            count = EYE_1_COUNT;
+            break;
+          case SEGMENT_EYE_0:
+            startLED = EYE_0_START;
+            count = EYE_0_COUNT;
+            break;
+          default:
+            continue;
+          }
+
+          for (int i = 0; i < count; i++)
+          {
+            int ledIndex = startLED + i;
+            if (ledIndex < numLeds)
+            {
+              leds[ledIndex] = rgbColor;
+            }
+          }
+        }
+        else
+        {
+          // Clock ring
+          for (int i = 0; i < CLOCK_COUNT; i++)
+          {
+            int ledIndex = CLOCK_START + i;
+            if (ledIndex < numLeds)
+            {
+              leds[ledIndex] = rgbColor;
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+void FireworkAction::updateSparklePhase(unsigned long currentTime)
+{
+  // Update existing sparkles
+  for (int i = 0; i < MAX_SPARKLES; i++)
+  {
+    if (sparkles[i].active)
+    {
+      // Fade sparkle
+      if (sparkles[i].intensity > sparkles[i].decayRate)
+      {
+        sparkles[i].intensity -= sparkles[i].decayRate;
+      }
+      else
+      {
+        sparkles[i].active = false;
+        continue;
+      }
+
+      // Set LED color
+      if (sparkles[i].ledIndex < numLeds)
+      {
+        CHSV hsvColor(sparkles[i].hue, 200, sparkles[i].intensity);
+        CRGB rgbColor;
+        hsv2rgb_rainbow(hsvColor, rgbColor);
+        leds[sparkles[i].ledIndex] = rgbColor;
+      }
+    }
+  }
+
+  // Occasionally add new sparkles
+  if (random8() < 30)
+  { // 30/255 chance each frame
+    addRandomSparkles(1);
+  }
+}
+
+void FireworkAction::initializeSparkles()
+{
+  for (int i = 0; i < MAX_SPARKLES; i++)
+  {
+    sparkles[i].active = false;
+    sparkles[i].intensity = 0;
+    sparkles[i].ledIndex = 0;
+    sparkles[i].hue = 0;
+    sparkles[i].decayRate = 1;
+  }
+}
+
+void FireworkAction::addRandomSparkles(int count)
+{
+  for (int i = 0; i < count; i++)
+  {
+    // Find inactive sparkle slot
+    for (int j = 0; j < MAX_SPARKLES; j++)
+    {
+      if (!sparkles[j].active)
+      {
+        sparkles[j].active = true;
+        sparkles[j].ledIndex = getRandomEyeOrClockLED();
+        sparkles[j].intensity = random8(150, 255); // Bright sparkles
+        sparkles[j].hue = random8();               // Random color
+        sparkles[j].decayRate = random8(1, 4);     // Random fade rate
+        break;
+      }
+    }
+  }
+}
+
+float FireworkAction::getDistanceFromCenter(uint16_t ledIndex)
+{
+  // Calculate distance from center (EYE_0) for explosion effect
+  if (ledIndex >= EYE_0_START && ledIndex < EYE_0_START + EYE_0_COUNT)
+  {
+    return 0.0f; // Center
+  }
+  else if (ledIndex >= EYE_1_START && ledIndex < EYE_1_START + EYE_1_COUNT)
+  {
+    return 1.0f;
+  }
+  else if (ledIndex >= EYE_2_START && ledIndex < EYE_2_START + EYE_2_COUNT)
+  {
+    return 2.0f;
+  }
+  else if (ledIndex >= EYE_3_START && ledIndex < EYE_3_START + EYE_3_COUNT)
+  {
+    return 3.0f;
+  }
+  else if (ledIndex >= EYE_4_START && ledIndex < EYE_4_START + EYE_4_COUNT)
+  {
+    return 4.0f;
+  }
+  else if (ledIndex >= CLOCK_START && ledIndex < CLOCK_START + CLOCK_COUNT)
+  {
+    return 5.0f; // Clock ring (outermost)
+  }
+  return 6.0f; // Unknown/outside
+}
+
+uint16_t FireworkAction::getRandomEyeOrClockLED()
+{
+  // Randomly select from eye rings or clock ring
+  int ringChoice = random8(6); // 0-5 for the 6 rings
+
+  switch (ringChoice)
+  {
+  case 0:
+    return EYE_0_START; // Center (only 1 LED)
+  case 1:
+    return EYE_1_START + random8(EYE_1_COUNT);
+  case 2:
+    return EYE_2_START + random8(EYE_2_COUNT);
+  case 3:
+    return EYE_3_START + random8(EYE_3_COUNT);
+  case 4:
+    return EYE_4_START + random8(EYE_4_COUNT);
+  case 5:
+    return CLOCK_START + random8(CLOCK_COUNT);
+  default:
+    return EYE_0_START;
+  }
+}
