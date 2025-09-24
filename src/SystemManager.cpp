@@ -200,7 +200,7 @@ void SystemManager::handleLEDCommands(const String &command)
   else if (command == "calibrate")
   {
     Serial.println("=== ENTERING CALIBRATION MODE ===");
-    ledDriver->setMode(MODE_CALIBRATION); // Force calibration mode
+    ledDriver->setMode(SPECIAL_MODE_CALIBRATION); // Force calibration mode
     Serial.println("Move joystick to all extremes.");
     Serial.println("Press joystick button to save, or wait 10s to auto-save.");
     Serial.println("LEDs will blink rapidly during calibration.");

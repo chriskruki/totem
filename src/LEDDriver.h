@@ -35,11 +35,22 @@ private:
   // Pattern manager for advanced patterns
   PatternManager *patternManager;
 
-  // Global settings state
+  // Global settings state (for clock/eye)
   uint8_t globalBrightness;
   float globalSpeed;
   int selectedPatternIndex;
   int selectedPaletteIndex;
+
+  // Pole-specific settings (separate from clock)
+  uint8_t poleBrightness;
+  float poleSpeed;
+  int selectedPolePatternIndex;
+  int selectedPolePaletteIndex;
+  int selectedJoltPaletteIndex;
+
+  // Mode system state
+  uint8_t currentMainMode; // Current main mode (Explorer/Interaction)
+  uint8_t currentSubMode;  // Current sub-mode within main mode
 
   // Settings mode state
   enum SettingsPhase
@@ -74,7 +85,7 @@ private:
   bool calibrationBlinkState;
   int xMin, xMax, yMin, yMax; // Calibrated joystick bounds
 
-  // Triple-click detection
+  // Double-click detection
   int clickCount;
   unsigned long lastClickTime;
   unsigned long firstClickTime;
@@ -105,22 +116,55 @@ private:
   unsigned long fireworkModeStartTime;
   bool lastJoystickUpState;
 
-  // Private mode processing methods
-  void processMainMode();
-  void processSettingsMode();
-  void processEyeMode();
-  void processPatternMode();
+  // Pole pattern control
+
+  // Mode processing methods
+  void processCurrentMode();
+  void processExplorerMode();
+  void processInteractionMode();
+
+  // Explorer sub-mode methods
+  void processClockPatternExplorer();
+  void processClockSettings();
+  void processPolePatternExplorer();
+  void processPoleSettings();
+
+  // Interaction sub-mode methods
+  void processEyeballMode();
   void processFireworkMode();
-  void processBrightnessSpeedMode();
+  void processJoltMode();
+
+  // Special mode methods
+  void processSettingsMode();
   void processCalibrationMode();
 
-  // Firework mode helper methods
-  bool detectTripleClick(unsigned long currentTime);
-  void enterFireworkMode(unsigned long currentTime);
+  // Mode switching methods
+  void cycleSingleClick(); // Cycle sub-mode
+  void cycleDoubleClick(); // Cycle main mode
+  String getCurrentModeDescription() const;
+  String getCurrentSubModeDescription() const;
+
+  // Firework mode helper methods (accessed via Interaction Mode)
   void exitFireworkMode();
   void launchFirework(unsigned long currentTime);
   void updateActiveFireworks(unsigned long currentTime);
   void cleanupInactiveFireworks();
+
+  // Jolt mode helper methods
+  uint8_t calculateJoltMagnitude(int joystickY);
+  void renderJoltEffect(uint8_t magnitude);
+  void renderJoltPole(uint8_t magnitude);
+  void renderJoltEyeClock(uint8_t magnitude);
+
+  // Pole pattern control methods
+  void setPolePatternIndex(int patternIndex);
+  void updatePolePatternSelection();
+
+  // Legacy mode methods (for reuse in new system)
+  void processMainModeOld();
+  void processEyeModeOld();
+  void processBrightnessSpeedModeOld();
+  void processPatternModeOld();
 
   // Settings mode helper methods
   void processSettingsPhase1();

@@ -4,7 +4,7 @@
 LEDDriver::LEDDriver() : brightness(DEFAULT_BRIGHTNESS),
                          lastUpdate(0),
                          needsUpdate(false),
-                         currentMode(MODE_PATTERN),
+                         currentMode(MAIN_MODE_EXPLORER), // Start in Explorer mode
                          currentR(STATIC_COLOR_R),
                          currentG(STATIC_COLOR_G),
                          currentB(STATIC_COLOR_B),
@@ -15,6 +15,13 @@ LEDDriver::LEDDriver() : brightness(DEFAULT_BRIGHTNESS),
                          globalSpeed(DEFAULT_GLOBAL_SPEED),
                          selectedPatternIndex(6), // Wave pattern (index 6)
                          selectedPaletteIndex(1), // Ocean palette (index 1)
+                         poleBrightness(DEFAULT_POLE_BRIGHTNESS),
+                         poleSpeed(DEFAULT_POLE_SPEED),
+                         selectedPolePatternIndex(1), // Spiral Chase pattern (default)
+                         selectedPolePaletteIndex(0), // First pole palette
+                         selectedJoltPaletteIndex(0), // First palette for jolt mode
+                         currentMainMode(MAIN_MODE_EXPLORER),
+                         currentSubMode(EXPLORER_SUBMODE_CLOCK_PATTERN),
                          settingsPhase(PHASE_1_QUADRANTS),
                          currentQuadrant(-1),
                          previewedItem(-1),
@@ -246,52 +253,40 @@ void LEDDriver::readJoystick()
       joystickState.lastButtonState = buttonState;
       joystickState.lastButtonChange = currentTime;
 
-      // Check for double-click to enter settings mode
+      // Check for double-click to cycle main mode
       if (buttonState && detectDoubleClick(buttonState, currentTime))
       {
-        currentMode = MODE_SETTINGS;
-        settingsPhase = PHASE_1_QUADRANTS;
-        currentQuadrant = -1;
-        previewedItem = -1;
-        itemPreviewed = false;
-        isHolding = false;
-        Serial.println("Mode changed to: Settings Mode (Double-Click)");
+        // Check if we're in firework mode - double click exits AND cycles mode
+        if (inFireworkMode)
+        {
+          exitFireworkMode();
+          // Continue to process normal mode switching to leave firework sub-mode
+        }
+
+        // Normal double-click: cycle main mode
+        cycleDoubleClick();
       }
-      // Normal mode switching on single button press
+      // Single-click: cycle sub-mode
       else if (buttonState && !inCalibrationMode)
       {
-        // If in settings mode, single click returns to pattern mode
-        if (currentMode == MODE_SETTINGS)
+        // If in settings mode, single click returns to previous mode
+        if (currentMode == SPECIAL_MODE_SETTINGS)
         {
-          currentMode = MODE_PATTERN;
-          Serial.println("Mode changed to: Pattern/Palette Explore Mode - Exited Settings Mode");
+          currentMode = currentMainMode; // Return to main mode
+          Serial.print("Exited Settings Mode, returned to: ");
+          Serial.println(getCurrentModeDescription());
         }
         else
         {
-          // Check if we're in firework mode - single click exits
+          // Check if we're in firework mode - single click exits AND cycles mode
           if (inFireworkMode)
           {
             exitFireworkMode();
-            return; // Don't process normal mode switching
+            // Continue to process normal mode switching to leave firework sub-mode
           }
 
-          // Simple toggle between Pattern and Eye modes
-          if (currentMode == MODE_PATTERN)
-          {
-            currentMode = MODE_EYE;
-            Serial.println("Mode changed to: Eye Mode");
-          }
-          else if (currentMode == MODE_EYE)
-          {
-            currentMode = MODE_PATTERN;
-            Serial.println("Mode changed to: Pattern/Palette Explore Mode");
-          }
-          else
-          {
-            // Fallback - should not happen, but go to pattern mode
-            currentMode = MODE_PATTERN;
-            Serial.println("Mode changed to: Pattern/Palette Explore Mode (fallback)");
-          }
+          // Normal single-click: cycle sub-mode
+          cycleSingleClick();
         }
       }
     }
@@ -303,43 +298,110 @@ void LEDDriver::readJoystick()
 
 void LEDDriver::processJoystickInput()
 {
-  // Handle calibration mode first
+  // Handle special modes first
   if (inCalibrationMode)
   {
     processCalibrationMode();
     return;
   }
 
-  switch (currentMode)
+  // Check if we're in a special settings mode
+  if (currentMode == SPECIAL_MODE_SETTINGS)
   {
-  case MODE_SETTINGS:
-    // Mode 0: Settings mode - quadrant-based interface
     processSettingsMode();
+    return;
+  }
+
+  // Process current mode based on main mode and sub-mode
+  processCurrentMode();
+}
+
+void LEDDriver::processCurrentMode()
+{
+  switch (currentMainMode)
+  {
+  case MAIN_MODE_EXPLORER:
+    // Explorer Mode: Color/Pattern exploration
+    processExplorerMode();
     break;
 
-  case MODE_PATTERN:
-    // Mode 1: Pattern/Palette explore mode - joystick controls pattern/palette
-    processPatternMode();
+  case MAIN_MODE_INTERACTION:
+    // Interaction Mode: Interactive effects
+    processInteractionMode();
     break;
 
-  case MODE_EYE:
-    // Mode 2: Eye mode - shows patterns on clock, eye tracking when joystick active
-    processEyeMode();
-    break;
-
-  case MODE_FIREWORK:
-    // Mode 3: Firework mode - triple-click activated, joystick up launches fireworks
-    processFireworkMode();
-    break;
-
-  case MODE_BRIGHTNESS_SPEED:
-    // Mode 4: Combined brightness/speed mode - up/down brightness, left/right speed
-    processBrightnessSpeedMode();
+  default:
+    // Fallback to Explorer mode
+    Serial.println("Unknown main mode, falling back to Explorer");
+    currentMainMode = MAIN_MODE_EXPLORER;
+    currentSubMode = EXPLORER_SUBMODE_CLOCK_PATTERN;
+    processExplorerMode();
     break;
   }
 }
 
-void LEDDriver::processMainMode()
+void LEDDriver::processExplorerMode()
+{
+  switch (currentSubMode)
+  {
+  case EXPLORER_SUBMODE_CLOCK_PATTERN:
+    // Clock Pattern Explorer - joystick controls clock patterns/palettes
+    processClockPatternExplorer();
+    break;
+
+  case EXPLORER_SUBMODE_CLOCK_SETTINGS:
+    // Clock Settings - joystick controls clock brightness/speed
+    processClockSettings();
+    break;
+
+  case EXPLORER_SUBMODE_POLE_PATTERN:
+    // Pole Pattern Explorer - joystick controls pole patterns/palettes
+    processPolePatternExplorer();
+    break;
+
+  case EXPLORER_SUBMODE_POLE_SETTINGS:
+    // Pole Settings - joystick controls pole brightness/speed
+    processPoleSettings();
+    break;
+
+  default:
+    // Fallback to clock pattern explorer
+    Serial.println("Unknown explorer sub-mode, falling back to Clock Pattern");
+    currentSubMode = EXPLORER_SUBMODE_CLOCK_PATTERN;
+    processClockPatternExplorer();
+    break;
+  }
+}
+
+void LEDDriver::processInteractionMode()
+{
+  switch (currentSubMode)
+  {
+  case INTERACTION_SUBMODE_EYEBALL:
+    // Eyeball Mode - eye tracking when joystick active
+    processEyeballMode();
+    break;
+
+  case INTERACTION_SUBMODE_FIREWORK:
+    // Firework Mode - joystick up launches fireworks
+    processFireworkMode();
+    break;
+
+  case INTERACTION_SUBMODE_JOLT:
+    // Jolt Mode - magnitude-based rainbow expansion
+    processJoltMode();
+    break;
+
+  default:
+    // Fallback to eyeball mode
+    Serial.println("Unknown interaction sub-mode, falling back to Eyeball");
+    currentSubMode = INTERACTION_SUBMODE_EYEBALL;
+    processEyeballMode();
+    break;
+  }
+}
+
+void LEDDriver::processMainModeOld()
 {
   // Mode 0: Main mode - display selected pattern and palette
   unsigned long currentTime = millis();
@@ -362,7 +424,7 @@ void LEDDriver::processMainMode()
   }
 }
 
-void LEDDriver::processEyeMode()
+void LEDDriver::processEyeModeOld()
 {
   // Mode 2: Eye mode - shows patterns on clock, eye tracking when joystick active
   unsigned long currentTime = millis();
@@ -483,32 +545,24 @@ void LEDDriver::setLED(int index, CRGB color, uint8_t brightness)
 
 void LEDDriver::setMode(uint8_t mode)
 {
-  if (mode < NUM_MODES || mode == MODE_CALIBRATION)
+  if (mode < NUM_MAIN_MODES || mode == SPECIAL_MODE_CALIBRATION)
   {
     // Handle calibration mode specially
-    if (mode == MODE_CALIBRATION)
+    if (mode == SPECIAL_MODE_CALIBRATION)
     {
       startCalibrationMode();
       return;
     }
 
     currentMode = mode;
+    // Update the main mode system
+    currentMainMode = mode;
+    currentSubMode = 0; // Reset to first sub-mode
+
     Serial.print("Mode manually set to: ");
-    switch (currentMode)
-    {
-    case MODE_SETTINGS:
-      Serial.println("Settings Mode");
-      break;
-    case MODE_PATTERN:
-      Serial.println("Pattern/Palette Explore Mode");
-      break;
-    case MODE_EYE:
-      Serial.println("Eye Mode");
-      break;
-    case MODE_BRIGHTNESS_SPEED:
-      Serial.println("Brightness/Speed Mode");
-      break;
-    }
+    Serial.print(getCurrentModeDescription());
+    Serial.print(" - Sub-Mode: ");
+    Serial.println(getCurrentSubModeDescription());
   }
   else
   {
@@ -533,7 +587,7 @@ bool LEDDriver::detectDoubleClick(bool buttonPressed, unsigned long currentTime)
   }
 
   // Reset if too much time has passed since first click
-  if (clickCount > 0 && (currentTime - firstClickTime) > TRIPLE_CLICK_TIMEOUT)
+  if (clickCount > 0 && (currentTime - firstClickTime) > DOUBLE_CLICK_TIMEOUT)
   {
     clickCount = 0;
   }
@@ -544,53 +598,34 @@ bool LEDDriver::detectDoubleClick(bool buttonPressed, unsigned long currentTime)
     clickCount = 1;
     firstClickTime = currentTime;
     lastClickTime = currentTime;
-    Serial.println("Click 1/3");
+    Serial.println("Click 1/2");
     return false;
   }
 
-  // Subsequent clicks - check timing
-  if ((currentTime - lastClickTime) < TRIPLE_CLICK_TIMEOUT)
+  // Second click - check timing
+  if ((currentTime - lastClickTime) < DOUBLE_CLICK_TIMEOUT)
   {
     clickCount++;
     lastClickTime = currentTime;
 
     Serial.print("Click ");
     Serial.print(clickCount);
-    Serial.println("/3");
+    Serial.println("/2");
 
-    if (clickCount == 2)
-    {
-      // Double click detected - continue for potential triple click
-      return false;
-    }
-    else if (clickCount >= 3)
+    if (clickCount >= 2)
     {
       clickCount = 0; // Reset for next time
-      Serial.println("TRIPLE CLICK DETECTED!");
-
-      // Enter firework mode on triple click
-      if (!inFireworkMode)
-      {
-        enterFireworkMode(currentTime);
-      }
-      return false; // Don't process as double click
+      Serial.println("DOUBLE CLICK DETECTED!");
+      return true;
     }
   }
   else
   {
-    // Check if we had a double click before timeout
-    if (clickCount == 2)
-    {
-      clickCount = 0;
-      Serial.println("DOUBLE CLICK DETECTED!");
-      return true;
-    }
-
     // Too slow, reset
     clickCount = 1;
     firstClickTime = currentTime;
     lastClickTime = currentTime;
-    Serial.println("Click 1/3 (reset)");
+    Serial.println("Click 1/2 (reset)");
   }
 
   return false;
@@ -637,7 +672,7 @@ void LEDDriver::exitCalibrationMode()
   show();
 }
 
-void LEDDriver::processBrightnessSpeedMode()
+void LEDDriver::processBrightnessSpeedModeOld()
 {
   // Mode 4: Combined brightness/speed mode - up/down brightness, left/right speed
   unsigned long currentTime = millis();
@@ -716,13 +751,21 @@ void LEDDriver::processBrightnessSpeedMode()
     lastSpeedChange = 0; // Reset when joystick returns to center
   }
 
-  // Clear all LEDs
-  fill_solid(leds, NUM_LEDS, CRGB::Black);
+  if (patternManager)
+  {
+    // Set the current pattern and palette based on selected indices (global settings)
+    patternManager->setCurrentPattern(selectedPatternIndex, false);
+    patternManager->setCurrentPalette(selectedPaletteIndex);
 
-  // Render wave effect on clock ring (reflects both brightness and speed)
-  renderWaveEffectOnClock();
+    // Apply current global settings
+    patternManager->setGlobalBrightness(globalBrightness);
+    patternManager->setGlobalSpeed(globalSpeed);
 
-  // Render combined preview showing both brightness and speed indicators
+    // Update pattern manager - this will update the LEDs with the current pattern/palette
+    patternManager->update(currentTime);
+  }
+
+  // Render combined preview showing both brightness and speed indicators on top of pattern
   uint8_t brightnessLevel = map(globalBrightness, SETTINGS_BRIGHTNESS_MIN, SETTINGS_BRIGHTNESS_MAX, 1, BRIGHTNESS_LEVELS);
   uint8_t speedLevel = map(globalSpeed * 10, SETTINGS_SPEED_MIN * 10, SETTINGS_SPEED_MAX * 10, 1, SPEED_LEVELS);
   renderCombinedPreview(brightnessLevel, speedLevel);
@@ -1011,7 +1054,7 @@ bool LEDDriver::handlePatternCommand(const String &command)
   return false;
 }
 
-void LEDDriver::processPatternMode()
+void LEDDriver::processPatternModeOld()
 {
   // Mode 3: Pattern browse mode - joystick controls pattern and palette selection
   unsigned long currentTime = millis();
@@ -1815,7 +1858,7 @@ void LEDDriver::applySelectedSetting()
   }
 
   // Return to pattern mode
-  currentMode = MODE_PATTERN;
+  currentMode = currentMainMode; // Return to current main mode
   settingsPhase = PHASE_1_QUADRANTS;
   stopHolding();
   currentQuadrant = -1;
@@ -1987,8 +2030,7 @@ void LEDDriver::updatePole()
   static PoleSpiralChasePattern *poleSpiralChase = nullptr;
   static PoleHelixPattern *poleHelix = nullptr;
   static PoleFirePattern *poleFire = nullptr;
-  static uint8_t currentPolePattern = 0;
-  static unsigned long lastPatternSwitch = 0;
+  static PoleBouncePattern *poleBounce = nullptr;
 
   unsigned long currentTime = millis();
 
@@ -1999,104 +2041,83 @@ void LEDDriver::updatePole()
     poleSpiralChase = new PoleSpiralChasePattern(leds, NUM_LEDS, poleLeds, POLE_NUM_LEDS);
     poleHelix = new PoleHelixPattern(leds, NUM_LEDS, poleLeds, POLE_NUM_LEDS);
     poleFire = new PoleFirePattern(leds, NUM_LEDS, poleLeds, POLE_NUM_LEDS);
+    poleBounce = new PoleBouncePattern(leds, NUM_LEDS, poleLeds, POLE_NUM_LEDS);
 
-    // Set initial pattern properties
-    poleColumnWave->setActive(true);
-    poleColumnWave->setBrightness(globalBrightness);
-    poleColumnWave->setSpeed(globalSpeed);
+    // Set default palette for all pole patterns (get from pattern manager)
+    if (patternManager)
+    {
+      ColorPalette *defaultPalette = patternManager->getPaletteManager().getPalette(selectedPolePaletteIndex);
+      poleColumnWave->setPalette(defaultPalette);
+      poleSpiralChase->setPalette(defaultPalette);
+      poleHelix->setPalette(defaultPalette);
+      poleFire->setPalette(defaultPalette);
+      poleBounce->setPalette(defaultPalette);
+    }
+
+    // Set initial pattern properties - start with spiral chase (index 1)
+    poleSpiralChase->setActive(true);
+    poleSpiralChase->setBrightness(poleBrightness);
+    poleSpiralChase->setSpeed(poleSpeed);
   }
 
-  // Switch between pole patterns every 10 seconds
-  if (currentTime - lastPatternSwitch > 10000)
+  // Always deactivate all patterns first
+  poleColumnWave->setActive(false);
+  poleSpiralChase->setActive(false);
+  poleHelix->setActive(false);
+  poleFire->setActive(false);
+  poleBounce->setActive(false);
+
+  // Update palette for all patterns if changed
+  static int lastPolePaletteIndex = -1;
+  if (patternManager && selectedPolePaletteIndex != lastPolePaletteIndex)
   {
-    // Deactivate current pattern
-    switch (currentPolePattern)
+    ColorPalette *currentPalette = patternManager->getPaletteManager().getPalette(selectedPolePaletteIndex);
+    if (currentPalette)
     {
-    case 0:
-      poleColumnWave->setActive(false);
-      break;
-    case 1:
-      poleSpiralChase->setActive(false);
-      break;
-    case 2:
-      poleHelix->setActive(false);
-      break;
-    case 3:
-      poleFire->setActive(false);
-      break;
+      poleColumnWave->setPalette(currentPalette);
+      poleSpiralChase->setPalette(currentPalette);
+      poleHelix->setPalette(currentPalette);
+      poleFire->setPalette(currentPalette);
+      poleBounce->setPalette(currentPalette);
+      lastPolePaletteIndex = selectedPolePaletteIndex;
     }
-
-    // Move to next pattern
-    currentPolePattern = (currentPolePattern + 1) % 4;
-
-    // Activate new pattern
-    switch (currentPolePattern)
-    {
-    case 0:
-      poleColumnWave->setActive(true);
-      poleColumnWave->setBrightness(globalBrightness);
-      poleColumnWave->setSpeed(globalSpeed);
-      Serial.println("Pole: Column Wave Pattern");
-      break;
-    case 1:
-      poleSpiralChase->setActive(true);
-      poleSpiralChase->setBrightness(globalBrightness);
-      poleSpiralChase->setSpeed(globalSpeed);
-      Serial.println("Pole: Spiral Chase Pattern");
-      break;
-    case 2:
-      poleHelix->setActive(true);
-      poleHelix->setBrightness(globalBrightness);
-      poleHelix->setSpeed(globalSpeed);
-      Serial.println("Pole: Helix Pattern");
-      break;
-    case 3:
-      poleFire->setActive(true);
-      poleFire->setBrightness(globalBrightness);
-      poleFire->setSpeed(globalSpeed);
-      Serial.println("Pole: Fire Pattern");
-      break;
-    }
-
-    lastPatternSwitch = currentTime;
   }
 
-  // Update current pattern
+  // Update only the selected pattern
+  uint8_t patternIndex = selectedPolePatternIndex % 5; // 5 patterns available
   bool updated = false;
-  switch (currentPolePattern)
+
+  switch (patternIndex)
   {
   case 0:
+    poleColumnWave->setActive(true);
+    poleColumnWave->setBrightness(poleBrightness);
+    poleColumnWave->setSpeed(poleSpeed);
     updated = poleColumnWave->update(currentTime);
     break;
   case 1:
+    poleSpiralChase->setActive(true);
+    poleSpiralChase->setBrightness(poleBrightness);
+    poleSpiralChase->setSpeed(poleSpeed);
     updated = poleSpiralChase->update(currentTime);
     break;
   case 2:
+    poleHelix->setActive(true);
+    poleHelix->setBrightness(poleBrightness);
+    poleHelix->setSpeed(poleSpeed);
     updated = poleHelix->update(currentTime);
     break;
   case 3:
+    poleFire->setActive(true);
+    poleFire->setBrightness(poleBrightness);
+    poleFire->setSpeed(poleSpeed);
     updated = poleFire->update(currentTime);
     break;
-  }
-
-  // Update pattern properties if global settings changed
-  switch (currentPolePattern)
-  {
-  case 0:
-    poleColumnWave->setBrightness(globalBrightness);
-    poleColumnWave->setSpeed(globalSpeed);
-    break;
-  case 1:
-    poleSpiralChase->setBrightness(globalBrightness);
-    poleSpiralChase->setSpeed(globalSpeed);
-    break;
-  case 2:
-    poleHelix->setBrightness(globalBrightness);
-    poleHelix->setSpeed(globalSpeed);
-    break;
-  case 3:
-    poleFire->setBrightness(globalBrightness);
-    poleFire->setSpeed(globalSpeed);
+  case 4:
+    poleBounce->setActive(true);
+    poleBounce->setBrightness(poleBrightness);
+    poleBounce->setSpeed(poleSpeed);
+    updated = poleBounce->update(currentTime);
     break;
   }
 }
@@ -2104,16 +2125,6 @@ void LEDDriver::updatePole()
 // ============================================================================
 // FIREWORK MODE IMPLEMENTATION
 // ============================================================================
-
-void LEDDriver::enterFireworkMode(unsigned long currentTime)
-{
-  inFireworkMode = true;
-  fireworkModeStartTime = currentTime;
-  lastJoystickUpState = false;
-
-  Serial.println("Entered Firework Mode! Move joystick UP to launch fireworks.");
-  Serial.println("Mode will auto-exit after 30 seconds or single-click to exit.");
-}
 
 void LEDDriver::exitFireworkMode()
 {
@@ -2136,6 +2147,16 @@ void LEDDriver::exitFireworkMode()
 void LEDDriver::processFireworkMode()
 {
   unsigned long currentTime = millis();
+
+  // Only auto-enter if we're not already in firework mode
+  if (!inFireworkMode)
+  {
+    inFireworkMode = true;
+    fireworkModeStartTime = currentTime;
+    lastJoystickUpState = false;
+
+    Serial.println("Entered Firework Mode! Move joystick UP to launch fireworks.");
+  }
 
   // Check for timeout
   if (currentTime - fireworkModeStartTime > FIREWORK_MODE_TIMEOUT)
@@ -2223,6 +2244,609 @@ void LEDDriver::cleanupInactiveFireworks()
       Serial.print(" (Active: ");
       Serial.print(activeFireworkCount);
       Serial.println(")");
+    }
+  }
+}
+
+// ============================================================================
+// MODE SWITCHING IMPLEMENTATION
+// ============================================================================
+
+void LEDDriver::cycleSingleClick()
+{
+  // Single click cycles sub-modes within current main mode
+  if (currentMainMode == MAIN_MODE_EXPLORER)
+  {
+    // If leaving pole pattern explorer, return to auto mode
+    if (currentSubMode == EXPLORER_SUBMODE_POLE_PATTERN)
+    {
+      // No auto-cycling - pole patterns are always manually controlled
+    }
+
+    // Cycle through Explorer sub-modes
+    currentSubMode = (currentSubMode + 1) % NUM_EXPLORER_SUBMODES;
+
+    Serial.print("Single Click - Cycled to Explorer Sub-Mode: ");
+    Serial.println(getCurrentSubModeDescription());
+  }
+  else if (currentMainMode == MAIN_MODE_INTERACTION)
+  {
+    // If leaving firework mode, exit firework state
+    if (currentSubMode == INTERACTION_SUBMODE_FIREWORK && inFireworkMode)
+    {
+      exitFireworkMode();
+    }
+
+    // Cycle through Interaction sub-modes
+    currentSubMode = (currentSubMode + 1) % NUM_INTERACTION_SUBMODES;
+
+    Serial.print("Single Click - Cycled to Interaction Sub-Mode: ");
+    Serial.println(getCurrentSubModeDescription());
+  }
+}
+
+void LEDDriver::cycleDoubleClick()
+{
+  // If leaving pole pattern explorer, return to auto mode
+  if (currentMainMode == MAIN_MODE_EXPLORER && currentSubMode == EXPLORER_SUBMODE_POLE_PATTERN)
+  {
+    // No auto-cycling - pole patterns are always manually controlled
+  }
+
+  // If leaving firework mode, exit firework state
+  if (currentMainMode == MAIN_MODE_INTERACTION && currentSubMode == INTERACTION_SUBMODE_FIREWORK && inFireworkMode)
+  {
+    exitFireworkMode();
+  }
+
+  // Double click cycles main modes
+  currentMainMode = (currentMainMode + 1) % NUM_MAIN_MODES;
+  currentSubMode = 0; // Reset to first sub-mode of new main mode
+
+  Serial.print("Double Click - Cycled to Main Mode: ");
+  Serial.print(getCurrentModeDescription());
+  Serial.print(" - Sub-Mode: ");
+  Serial.println(getCurrentSubModeDescription());
+}
+
+String LEDDriver::getCurrentModeDescription() const
+{
+  switch (currentMainMode)
+  {
+  case MAIN_MODE_EXPLORER:
+    return "Explorer Mode (Color/Pattern)";
+  case MAIN_MODE_INTERACTION:
+    return "Interaction Mode (Effects)";
+  default:
+    return "Unknown Mode";
+  }
+}
+
+String LEDDriver::getCurrentSubModeDescription() const
+{
+  if (currentMainMode == MAIN_MODE_EXPLORER)
+  {
+    switch (currentSubMode)
+    {
+    case EXPLORER_SUBMODE_CLOCK_PATTERN:
+      return "Clock Pattern Explorer";
+    case EXPLORER_SUBMODE_CLOCK_SETTINGS:
+      return "Clock Brightness/Speed";
+    case EXPLORER_SUBMODE_POLE_PATTERN:
+      return "Pole Pattern Explorer";
+    case EXPLORER_SUBMODE_POLE_SETTINGS:
+      return "Pole Brightness/Speed";
+    default:
+      return "Unknown Explorer Sub-Mode";
+    }
+  }
+  else if (currentMainMode == MAIN_MODE_INTERACTION)
+  {
+    switch (currentSubMode)
+    {
+    case INTERACTION_SUBMODE_EYEBALL:
+      return "Eyeball Tracking";
+    case INTERACTION_SUBMODE_FIREWORK:
+      return "Firework Launch";
+    case INTERACTION_SUBMODE_JOLT:
+      return "Jolt Magnitude";
+    default:
+      return "Unknown Interaction Sub-Mode";
+    }
+  }
+  return "Unknown Sub-Mode";
+}
+
+// ============================================================================
+// POLE PATTERN CONTROL IMPLEMENTATION
+// ============================================================================
+
+void LEDDriver::setPolePatternIndex(int patternIndex)
+{
+  selectedPolePatternIndex = patternIndex % 5; // Ensure valid range (5 patterns now)
+
+  const char *patternNames[] = {"Column Wave", "Spiral Chase", "Helix", "Fire", "Bounce"};
+  Serial.print("Pole pattern set to: ");
+  Serial.println(patternNames[selectedPolePatternIndex]);
+}
+
+void LEDDriver::updatePolePatternSelection()
+{
+  // This method can be called to apply pole pattern changes
+  // The actual pattern switching happens in updatePole()
+}
+
+// ============================================================================
+// EXPLORER SUB-MODE IMPLEMENTATIONS
+// ============================================================================
+
+void LEDDriver::processClockPatternExplorer()
+{
+  // Same as the old pattern mode - joystick controls clock patterns/palettes
+  processPatternModeOld(); // Reuse existing implementation
+}
+
+void LEDDriver::processClockSettings()
+{
+  // Same as the old brightness/speed mode for clock
+  processBrightnessSpeedModeOld(); // Reuse existing implementation
+}
+
+void LEDDriver::processPolePatternExplorer()
+{
+  // Pole patterns are always manually controlled
+
+  // Handle joystick input for pole pattern selection
+  unsigned long currentTime = millis();
+
+  // Get joystick input
+  int deltaX = joystickState.x - JOYSTICK_CENTER;
+  int deltaY = joystickState.y - JOYSTICK_CENTER;
+
+  // Static variables for timing and previous position
+  static unsigned long lastPatternChange = 0;
+  static int lastDeltaX = 0;
+  static int lastDeltaY = 0;
+  static const unsigned long PATTERN_CHANGE_DELAY = 200; // 200ms delay between changes
+
+  // Check if joystick is outside deadzone
+  bool joystickMoved = (abs(deltaX) > JOYSTICK_DEADZONE || abs(deltaY) > JOYSTICK_DEADZONE);
+  bool canChange = (currentTime - lastPatternChange) > PATTERN_CHANGE_DELAY;
+
+  if (joystickMoved && canChange)
+  {
+    // Left/Right controls pole pattern (5 pole patterns available)
+    if (abs(deltaX) > JOYSTICK_DEADZONE)
+    {
+      if (deltaX > 0 && lastDeltaX <= JOYSTICK_DEADZONE) // Right
+      {
+        selectedPolePatternIndex = (selectedPolePatternIndex + 1) % 5;
+        lastPatternChange = currentTime;
+
+        // Print pattern name
+        const char *patternNames[] = {"Column Wave", "Spiral Chase", "Helix", "Fire", "Bounce"};
+        Serial.print("Pole Pattern: ");
+        Serial.println(patternNames[selectedPolePatternIndex]);
+      }
+      else if (deltaX < 0 && lastDeltaX >= -JOYSTICK_DEADZONE) // Left
+      {
+        selectedPolePatternIndex = (selectedPolePatternIndex + 4) % 5; // +4 is same as -1 with wrap
+        lastPatternChange = currentTime;
+
+        // Print pattern name
+        const char *patternNames[] = {"Column Wave", "Spiral Chase", "Helix", "Fire", "Bounce"};
+        Serial.print("Pole Pattern: ");
+        Serial.println(patternNames[selectedPolePatternIndex]);
+      }
+    }
+
+    // Up/Down controls pole palette
+    if (abs(deltaY) > JOYSTICK_DEADZONE && patternManager)
+    {
+      if (deltaY > 0 && lastDeltaY <= JOYSTICK_DEADZONE) // Up - next palette
+      {
+        selectedPolePaletteIndex = (selectedPolePaletteIndex + 1) % patternManager->getPaletteManager().getPaletteCount();
+        lastPatternChange = currentTime;
+
+        // Update all pole patterns with new palette
+        ColorPalette *newPalette = patternManager->getPaletteManager().getPalette(selectedPolePaletteIndex);
+        if (newPalette)
+        {
+          Serial.print("Pole Palette: ");
+          Serial.println(newPalette->getName());
+        }
+      }
+      else if (deltaY < 0 && lastDeltaY >= -JOYSTICK_DEADZONE) // Down - previous palette
+      {
+        int paletteCount = patternManager->getPaletteManager().getPaletteCount();
+        selectedPolePaletteIndex = (selectedPolePaletteIndex + paletteCount - 1) % paletteCount;
+        lastPatternChange = currentTime;
+
+        // Update all pole patterns with new palette
+        ColorPalette *newPalette = patternManager->getPaletteManager().getPalette(selectedPolePaletteIndex);
+        if (newPalette)
+        {
+          Serial.print("Pole Palette: ");
+          Serial.println(newPalette->getName());
+        }
+      }
+    }
+  }
+
+  // Store previous joystick position
+  lastDeltaX = deltaX;
+  lastDeltaY = deltaY;
+
+  // Clear main LEDs (eye/clock) so only pole shows
+  fill_solid(leds, NUM_LEDS, CRGB::Black);
+
+  // The pole pattern will be updated by the regular updatePole() call
+  // which now uses selectedPolePatternIndex (always manual control)
+
+  show();
+}
+
+void LEDDriver::processPoleSettings()
+{
+  // Handle pole brightness and speed adjustment using discrete levels (like clock settings)
+  unsigned long currentTime = millis();
+
+  // Get joystick input
+  int yDiff = joystickState.y - JOYSTICK_CENTER;
+  int xDiff = joystickState.x - JOYSTICK_CENTER;
+
+  static int lastPoleBrightnessChange = 0;
+  static unsigned long lastPoleBrightnessChangeTime = 0;
+  static int lastPoleSpeedChange = 0;
+  static unsigned long lastPoleSpeedChangeTime = 0;
+  const unsigned long CHANGE_INTERVAL = 200;
+
+  // Handle pole brightness control (Y-axis) - discrete levels
+  if (abs(yDiff) > JOYSTICK_DEADZONE &&
+      (currentTime - lastPoleBrightnessChangeTime) > CHANGE_INTERVAL)
+  {
+    if (yDiff > 0 && lastPoleBrightnessChange <= 0) // Up - increase brightness
+    {
+      if (poleBrightness < POLE_BRIGHTNESS_MAX)
+      {
+        poleBrightness = min(POLE_BRIGHTNESS_MAX, poleBrightness + ((POLE_BRIGHTNESS_MAX - POLE_BRIGHTNESS_MIN) / BRIGHTNESS_LEVELS));
+        Serial.print("Pole brightness increased to: ");
+        Serial.println(poleBrightness);
+        lastPoleBrightnessChange = 1;
+        lastPoleBrightnessChangeTime = currentTime;
+      }
+    }
+    else if (yDiff < 0 && lastPoleBrightnessChange >= 0) // Down - decrease brightness
+    {
+      if (poleBrightness > POLE_BRIGHTNESS_MIN)
+      {
+        poleBrightness = max(POLE_BRIGHTNESS_MIN, poleBrightness - ((POLE_BRIGHTNESS_MAX - POLE_BRIGHTNESS_MIN) / BRIGHTNESS_LEVELS));
+        Serial.print("Pole brightness decreased to: ");
+        Serial.println(poleBrightness);
+        lastPoleBrightnessChange = -1;
+        lastPoleBrightnessChangeTime = currentTime;
+      }
+    }
+  }
+  else if (abs(yDiff) <= JOYSTICK_DEADZONE)
+  {
+    lastPoleBrightnessChange = 0; // Reset when joystick returns to center
+  }
+
+  // Handle pole speed control (X-axis) - discrete levels
+  if (abs(xDiff) > JOYSTICK_DEADZONE &&
+      (currentTime - lastPoleSpeedChangeTime) > CHANGE_INTERVAL)
+  {
+    if (xDiff > 0 && lastPoleSpeedChange <= 0) // Right - increase speed
+    {
+      if (poleSpeed < POLE_SPEED_MAX)
+      {
+        poleSpeed = min(POLE_SPEED_MAX, poleSpeed + ((POLE_SPEED_MAX - POLE_SPEED_MIN) / SPEED_LEVELS));
+        Serial.print("Pole speed increased to: ");
+        Serial.println(poleSpeed);
+        lastPoleSpeedChange = 1;
+        lastPoleSpeedChangeTime = currentTime;
+      }
+    }
+    else if (xDiff < 0 && lastPoleSpeedChange >= 0) // Left - decrease speed
+    {
+      if (poleSpeed > POLE_SPEED_MIN)
+      {
+        poleSpeed = max(POLE_SPEED_MIN, poleSpeed - ((POLE_SPEED_MAX - POLE_SPEED_MIN) / SPEED_LEVELS));
+        Serial.print("Pole speed decreased to: ");
+        Serial.println(poleSpeed);
+        lastPoleSpeedChange = -1;
+        lastPoleSpeedChangeTime = currentTime;
+      }
+    }
+  }
+  else if (abs(xDiff) <= JOYSTICK_DEADZONE)
+  {
+    lastPoleSpeedChange = 0; // Reset when joystick returns to center
+  }
+
+  // Display pole settings preview
+  // Clear main LEDs
+  fill_solid(leds, NUM_LEDS, CRGB::Black);
+
+  // Show pole brightness and speed using combined preview (like clock settings)
+  uint8_t brightnessLevel = map(poleBrightness, POLE_BRIGHTNESS_MIN, POLE_BRIGHTNESS_MAX, 1, BRIGHTNESS_LEVELS);
+  uint8_t speedLevel = map(poleSpeed * 10, POLE_SPEED_MIN * 10, POLE_SPEED_MAX * 10, 1, SPEED_LEVELS);
+  renderCombinedPreview(brightnessLevel, speedLevel);
+
+  show();
+}
+
+// ============================================================================
+// INTERACTION SUB-MODE IMPLEMENTATIONS
+// ============================================================================
+
+void LEDDriver::processEyeballMode()
+{
+  // Same as the old eye mode
+  processEyeModeOld(); // Reuse existing implementation
+}
+
+void LEDDriver::processJoltMode()
+{
+  // Jolt Mode: Magnitude-based palette expansion
+  unsigned long currentTime = millis();
+
+  // Handle palette selection with left/right joystick movement
+  int deltaX = joystickState.x - JOYSTICK_CENTER;
+
+  // Static variables for timing and previous position
+  static unsigned long lastPaletteChange = 0;
+  static int lastDeltaX = 0;
+  static const unsigned long PALETTE_CHANGE_DELAY = 300; // 300ms delay between changes
+
+  // Check if joystick moved horizontally and enough time has passed
+  bool canChangePalette = (currentTime - lastPaletteChange) > PALETTE_CHANGE_DELAY;
+
+  if (abs(deltaX) > JOYSTICK_DEADZONE && canChangePalette && patternManager)
+  {
+    if (deltaX > 0 && lastDeltaX <= JOYSTICK_DEADZONE) // Right - next palette
+    {
+      selectedJoltPaletteIndex = (selectedJoltPaletteIndex + 1) % patternManager->getPaletteManager().getPaletteCount();
+      lastPaletteChange = currentTime;
+
+      ColorPalette *newPalette = patternManager->getPaletteManager().getPalette(selectedJoltPaletteIndex);
+      if (newPalette)
+      {
+        Serial.print("Jolt Palette: ");
+        Serial.println(newPalette->getName());
+      }
+    }
+    else if (deltaX < 0 && lastDeltaX >= -JOYSTICK_DEADZONE) // Left - previous palette
+    {
+      int paletteCount = patternManager->getPaletteManager().getPaletteCount();
+      selectedJoltPaletteIndex = (selectedJoltPaletteIndex + paletteCount - 1) % paletteCount;
+      lastPaletteChange = currentTime;
+
+      ColorPalette *newPalette = patternManager->getPaletteManager().getPalette(selectedJoltPaletteIndex);
+      if (newPalette)
+      {
+        Serial.print("Jolt Palette: ");
+        Serial.println(newPalette->getName());
+      }
+    }
+  }
+
+  // Store previous joystick X position
+  lastDeltaX = deltaX;
+
+  // Calculate jolt magnitude based on joystick Y position
+  uint8_t magnitude = calculateJoltMagnitude(joystickState.y);
+
+  // Render jolt effect based on magnitude
+  renderJoltEffect(magnitude);
+
+  show();
+}
+
+// ============================================================================
+// JOLT MODE HELPER IMPLEMENTATIONS
+// ============================================================================
+
+uint8_t LEDDriver::calculateJoltMagnitude(int joystickY)
+{
+  // Calculate distance from center (only upward motion)
+  int deltaY = joystickY - JOYSTICK_CENTER;
+
+  // Only consider upward motion (positive deltaY)
+  if (deltaY <= JOLT_DEADZONE_THRESHOLD)
+  {
+    return 0; // In deadzone - center activation
+  }
+
+  // Smooth dynamic mapping from deadzone to maximum
+  // Map deltaY from JOLT_DEADZONE_THRESHOLD to JOLT_LEVEL_5_THRESHOLD -> 1 to 255
+  int clampedDelta = constrain(deltaY, JOLT_DEADZONE_THRESHOLD, JOLT_LEVEL_5_THRESHOLD);
+  uint8_t magnitude = map(clampedDelta, JOLT_DEADZONE_THRESHOLD, JOLT_LEVEL_5_THRESHOLD, 1, 255);
+
+  return magnitude;
+}
+
+void LEDDriver::renderJoltEffect(uint8_t magnitude)
+{
+  // Clear all LEDs first
+  fill_solid(leds, NUM_LEDS, CRGB::Black);
+  if (poleLeds)
+  {
+    fill_solid(poleLeds, POLE_NUM_LEDS, CRGB::Black);
+  }
+
+  if (magnitude == 0)
+  {
+    // Deadzone: Light up center eye and middle row of pole
+    // Center eye (EYE_0)
+    if (EYE_0_START < NUM_LEDS)
+    {
+      leds[EYE_0_START] = CRGB::White;
+    }
+
+    // Middle row of pole (approximate center)
+    if (poleLeds && POLE_NUM_LEDS > 0)
+    {
+      int middleIndex = POLE_NUM_LEDS / 2;
+      poleLeds[middleIndex] = CRGB::White;
+    }
+  }
+  else
+  {
+    // Render rainbow expansion based on magnitude
+    renderJoltPole(magnitude);
+    renderJoltEyeClock(magnitude);
+  }
+}
+
+void LEDDriver::renderJoltPole(uint8_t magnitude)
+{
+  if (!poleLeds || POLE_NUM_LEDS == 0)
+    return;
+
+  // Calculate how much of the pole to light up based on magnitude (0-255)
+  float expansionPercent = (float)magnitude / 255.0f; // Smooth 0-100% expansion
+  int ledsToLight = (int)(expansionPercent * POLE_NUM_LEDS);
+
+  // Find center of pole
+  int centerIndex = POLE_NUM_LEDS / 2;
+  int halfRange = ledsToLight / 2;
+
+  // Light up LEDs expanding from center both up and down
+  for (int i = 0; i < halfRange; i++)
+  {
+    // Get color from selected palette based on position
+    CRGB color = CRGB::White; // Default fallback
+
+    if (patternManager)
+    {
+      ColorPalette *currentPalette = patternManager->getPaletteManager().getPalette(selectedJoltPaletteIndex);
+      if (currentPalette && halfRange > 0)
+      {
+        float palettePosition = (float)i / (float)halfRange; // 0.0 to 1.0
+        color = currentPalette->getColorSmooth(palettePosition);
+        // Apply global brightness
+        color.nscale8(globalBrightness);
+      }
+      else
+      {
+        // Fallback to rainbow if no palette available
+        uint8_t hue = (i * 255) / max(1, halfRange); // Avoid division by zero
+        color = CHSV(hue, 255, globalBrightness);
+      }
+    }
+    else
+    {
+      // Fallback to rainbow if no pattern manager
+      uint8_t hue = (i * 255) / max(1, halfRange); // Avoid division by zero
+      color = CHSV(hue, 255, globalBrightness);
+    }
+
+    // Light up both directions from center
+    int upIndex = centerIndex + i;
+    int downIndex = centerIndex - i;
+
+    if (upIndex < POLE_NUM_LEDS)
+    {
+      poleLeds[upIndex] = color;
+    }
+    if (downIndex >= 0)
+    {
+      poleLeds[downIndex] = color;
+    }
+  }
+}
+
+void LEDDriver::renderJoltEyeClock(uint8_t magnitude)
+{
+  // Smooth expansion based on magnitude (0-255)
+  // Map magnitude to ring expansion: 0-42 = EYE_0, 43-85 = +EYE_1, etc.
+  float ringExpansion = (magnitude / 255.0f) * 6.0f; // 0.0 to 6.0 rings
+
+  // Light up complete rings and partial ring based on smooth expansion
+  for (int ring = 0; ring < 6; ring++)
+  {
+    float ringThreshold = (float)ring;
+
+    if (ringExpansion > ringThreshold)
+    {
+      // Calculate how much of this ring to light up
+      float ringProgress = min(1.0f, ringExpansion - ringThreshold);
+
+      // Get color from selected palette for this ring
+      CRGB color = CRGB::White; // Default fallback
+
+      if (patternManager)
+      {
+        ColorPalette *currentPalette = patternManager->getPaletteManager().getPalette(selectedJoltPaletteIndex);
+        if (currentPalette)
+        {
+          float palettePosition = (float)ring / 6.0f; // 0.0 to 1.0 across 6 rings
+          color = currentPalette->getColorSmooth(palettePosition);
+          // Apply brightness and ring progress
+          color.nscale8((uint8_t)(globalBrightness * ringProgress));
+        }
+        else
+        {
+          // Fallback to rainbow if no palette available
+          uint8_t hue = (ring * 255) / 6; // 6 total rings including clock
+          color = CHSV(hue, 255, (uint8_t)(globalBrightness * ringProgress));
+        }
+      }
+      else
+      {
+        // Fallback to rainbow if no pattern manager
+        uint8_t hue = (ring * 255) / 6; // 6 total rings including clock
+        color = CHSV(hue, 255, (uint8_t)(globalBrightness * ringProgress));
+      }
+
+      // Light up the appropriate ring
+      int startLED, count;
+      switch (ring)
+      {
+      case 0:
+        startLED = EYE_0_START;
+        count = EYE_0_COUNT;
+        break;
+      case 1:
+        startLED = EYE_1_START;
+        count = EYE_1_COUNT;
+        break;
+      case 2:
+        startLED = EYE_2_START;
+        count = EYE_2_COUNT;
+        break;
+      case 3:
+        startLED = EYE_3_START;
+        count = EYE_3_COUNT;
+        break;
+      case 4:
+        startLED = EYE_4_START;
+        count = EYE_4_COUNT;
+        break;
+      case 5:
+        startLED = CLOCK_START;
+        count = CLOCK_COUNT;
+        break;
+      default:
+        continue;
+      }
+
+      // For partial rings, only light up portion based on progress
+      int ledsToLight = (int)(count * ringProgress);
+      if (ledsToLight == 0 && ringProgress > 0)
+        ledsToLight = 1; // At least 1 LED
+
+      // Fill the ring with rainbow color
+      for (int i = 0; i < ledsToLight; i++)
+      {
+        int ledIndex = startLED + i;
+        if (ledIndex < NUM_LEDS)
+        {
+          leds[ledIndex] = color;
+        }
+      }
     }
   }
 }

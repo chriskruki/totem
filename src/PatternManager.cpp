@@ -39,18 +39,18 @@ void PatternManager::initialize()
   addPattern(new SolidPattern(leds, numLeds, CRGB::White));
   addPattern(new RainbowPattern(leds, numLeds));
   addPattern(new ChasePattern(leds, numLeds, CRGB::Red, 15));
-  addPattern(new PulsePattern(leds, numLeds, CRGB::Blue));
+  // addPattern(new PulsePattern(leds, numLeds, CRGB::Blue));
   addPattern(new TwinklePattern(leds, numLeds, 20));
   addPattern(new WavePattern(leds, numLeds, CRGB::Cyan, 10));
 
   // Add segment-aware patterns if SegmentManager is available
   if (segmentManager != nullptr)
   {
-    addPattern(new MultiRingPattern(leds, numLeds, segmentManager, 3));
+    // addPattern(new MultiRingPattern(leds, numLeds, segmentManager, 3));
     addPattern(new SpiralPattern(leds, numLeds, segmentManager, 2));
     addPattern(new RipplePattern(leds, numLeds, segmentManager, 1000));
-    addPattern(new EyeBreathingPattern(leds, numLeds, segmentManager));
-    addPattern(new SegmentTestPattern(leds, numLeds, segmentManager, SEGMENT_TEST_INTERVAL));
+    // addPattern(new EyeBreathingPattern(leds, numLeds, segmentManager));
+    // addPattern(new SegmentTestPattern(leds, numLeds, segmentManager, SEGMENT_TEST_INTERVAL));
   }
 
   // Set initial palette for all patterns

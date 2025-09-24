@@ -54,8 +54,8 @@ private:
   // Preset iris positions for each direction
   struct IrisPosition
   {
-    uint8_t ledCount;       ///< Number of LEDs to light up (usually 5)
-    uint16_t ledIndices[5]; ///< Absolute LED indices to light up
+    uint8_t ledCount;        ///< Number of LEDs to light up (usually 5-10)
+    uint16_t ledIndices[10]; ///< Absolute LED indices to light up (expanded to support up to 10)
   };
 
   static const uint8_t NUM_DIRECTIONS = 9; // Center + 8 directions

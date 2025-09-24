@@ -68,25 +68,25 @@
 #define SEGMENT_CLOCK 5
 
 // Debug and Testing Options
-#define ENABLE_SEGMENT_DEBUG true  // Enable segment debugging output
+#define ENABLE_SEGMENT_DEBUG false // Enable segment debugging output
 #define SEGMENT_TEST_INTERVAL 2000 // Segment test cycle interval (ms)
 
 // Brightness and Speed Mode Settings
-#define BRIGHTNESS_LEVELS 10 // Number of brightness levels (1-10)
-#define SPEED_LEVELS 10      // Number of speed levels (1-10)
+#define BRIGHTNESS_LEVELS 9 // Number of brightness levels (1-10)
+#define SPEED_LEVELS 9      // Number of speed levels (1-10)
 
 // Brightness preview LEDs (vertical column in eye rings)
 #define BRIGHTNESS_PREVIEW_LEDS 9
 const uint16_t BRIGHTNESS_LED_POSITIONS[BRIGHTNESS_PREVIEW_LEDS] = {
-    12, // EYE_4 bottom
-    32, // EYE_3 bottom
-    46, // EYE_2 bottom
-    56, // EYE_1 bottom
-    60, // EYE_0 center
-    52, // EYE_1 top
-    40, // EYE_2 top
+    0,   // EYE_4 top
     24, // EYE_3 top
-    0   // EYE_4 top
+    40, // EYE_2 top
+    52, // EYE_1 top
+    60, // EYE_0 center
+    56, // EYE_1 bottom
+    46, // EYE_2 bottom
+    32, // EYE_3 bottom
+    12, // EYE_4 bottom
 };
 
 // Speed preview LEDs (horizontal line in eye rings)
@@ -144,23 +144,60 @@ const uint16_t SPEED_LED_POSITIONS[SPEED_PREVIEW_LEDS] = {
 #define STATIC_COLOR_G 0
 #define STATIC_COLOR_B 100
 
-// Mode definitions
-#define MODE_SETTINGS 0         // Settings mode - quadrant-based interface (not in cycle)
-#define MODE_PATTERN 1          // Pattern/Palette explore mode - joystick controls pattern/palette
-#define MODE_EYE 2              // Eye mode - shows patterns on clock, eye tracking when joystick active
-#define MODE_FIREWORK 3         // Firework mode - triple-click activated, joystick up launches fireworks
-#define MODE_BRIGHTNESS_SPEED 4 // Combined mode - up/down brightness, left/right speed
-#define MODE_CALIBRATION 5      // Joystick calibration mode
-#define NUM_MODES 2             // Number of modes in normal cycle (Pattern/Eye toggle only)
+// ============================================================================
+// MODE SYSTEM DEFINITIONS
+// ============================================================================
+
+// Main Mode Categories
+#define MAIN_MODE_EXPLORER 0    // Color/Pattern Explorer Mode
+#define MAIN_MODE_INTERACTION 1 // Interaction Modes
+#define NUM_MAIN_MODES 2        // Number of main modes
+
+// Explorer Mode Sub-Modes (Main Mode 0)
+#define EXPLORER_SUBMODE_CLOCK_PATTERN 0  // Clock Pattern Explorer
+#define EXPLORER_SUBMODE_CLOCK_SETTINGS 1 // Clock Brightness/Speed
+#define EXPLORER_SUBMODE_POLE_PATTERN 2   // Pole Pattern Explorer
+#define EXPLORER_SUBMODE_POLE_SETTINGS 3  // Pole Brightness/Speed
+#define NUM_EXPLORER_SUBMODES 4           // Number of explorer sub-modes
+
+// Interaction Mode Sub-Modes (Main Mode 1)
+#define INTERACTION_SUBMODE_EYEBALL 0  // Eyeball tracking mode
+#define INTERACTION_SUBMODE_FIREWORK 1 // Firework launch mode
+#define INTERACTION_SUBMODE_JOLT 2     // Jolt magnitude mode
+#define NUM_INTERACTION_SUBMODES 3     // Number of interaction sub-modes
+
+// Special Modes (not in normal cycle)
+#define SPECIAL_MODE_SETTINGS 99    // Settings mode - quadrant-based interface
+#define SPECIAL_MODE_CALIBRATION 98 // Joystick calibration mode
+
+// Current mode tracking
+extern uint8_t currentMainMode;
+extern uint8_t currentSubMode;
 
 // Joystick sensitivity settings
-#define BUTTON_DEBOUNCE_MS 200   // Button debounce time
-#define TRIPLE_CLICK_TIMEOUT 600 // Triple-click detection timeout (ms)
+#define BUTTON_DEBOUNCE_MS 200 // Button debounce time
 
 // Firework mode settings
 #define MAX_ACTIVE_FIREWORKS 5        // Maximum simultaneous firework instances
 #define FIREWORK_LAUNCH_THRESHOLD 200 // Joystick Y threshold to launch firework
 #define FIREWORK_MODE_TIMEOUT 30000   // Auto-exit firework mode after 30 seconds
+
+// Jolt Mode Settings
+#define JOLT_MAGNITUDE_LEVELS 5     // Number of magnitude levels (1-5)
+#define JOLT_DEADZONE_THRESHOLD 50  // Deadzone threshold for center activation
+#define JOLT_LEVEL_1_THRESHOLD 300  // Level 1 threshold (just outside deadzone)
+#define JOLT_LEVEL_2_THRESHOLD 700  // Level 2 threshold
+#define JOLT_LEVEL_3_THRESHOLD 1100 // Level 3 threshold
+#define JOLT_LEVEL_4_THRESHOLD 1500 // Level 4 threshold
+#define JOLT_LEVEL_5_THRESHOLD 2200 // Level 5 threshold (near max magnitude from center to top)
+
+// Pole-specific settings (separate from clock settings)
+#define DEFAULT_POLE_BRIGHTNESS 128 // Default pole brightness (0-255)
+#define DEFAULT_POLE_SPEED 0.5f     // Default pole speed multiplier
+#define POLE_BRIGHTNESS_MIN 10      // Minimum pole brightness
+#define POLE_BRIGHTNESS_MAX 255     // Maximum pole brightness
+#define POLE_SPEED_MIN 0.1f         // Minimum pole speed
+#define POLE_SPEED_MAX 5.0f         // Maximum pole speed
 
 // Pointer mode settings
 #define POINTER_LED_COUNT 3    // Number of LEDs to light up in pointer mode (deprecated - use width)

@@ -18,76 +18,116 @@ void EyeRenderer::initializeIrisPositions()
   // Direction indices: 0=Center, 1=N, 2=NE, 3=E, 4=SE, 5=S, 6=SW, 7=W, 8=NW
 
   // CENTER (0) - Iris in the center area
-  irisPositions[0].ledCount = 5;
+  irisPositions[0].ledCount = 9;
   irisPositions[0].ledIndices[0] = 60; // EYE_0 (center)
-  irisPositions[0].ledIndices[1] = 56; // EYE_1 top
-  irisPositions[0].ledIndices[2] = 58; // EYE_1 right
-  irisPositions[0].ledIndices[3] = 52; // EYE_1 bottom (duplicate center for now)
-  irisPositions[0].ledIndices[4] = 54; // EYE_1 left
+  irisPositions[0].ledIndices[1] = 52; // EYE_1 top
+  irisPositions[0].ledIndices[2] = 53; // EYE_1 right
+  irisPositions[0].ledIndices[3] = 54; // EYE_1 bottom (duplicate center for now)
+  irisPositions[0].ledIndices[4] = 55; // EYE_1 left
+  irisPositions[0].ledIndices[5] = 56; // EYE_1 left
+  irisPositions[0].ledIndices[6] = 57; // EYE_1 left
+  irisPositions[0].ledIndices[7] = 58; // EYE_1 left
+  irisPositions[0].ledIndices[8] = 59; // EYE_1 left
 
   // NORTH (1) - Looking up
-  irisPositions[1].ledCount = 5;
+  irisPositions[1].ledCount = 9;
   irisPositions[1].ledIndices[0] = 24; // EYE_0 (center)
-  irisPositions[1].ledIndices[1] = 0;  // EYE_1 top
-  irisPositions[1].ledIndices[2] = 25; // EYE_2 top-right
-  irisPositions[1].ledIndices[3] = 39; // EYE_2 top
-  irisPositions[1].ledIndices[4] = 40; // EYE_2 top-left
+  irisPositions[1].ledIndices[1] = 22; // EYE_1 top
+  irisPositions[1].ledIndices[2] = 23; // EYE_1 right
+  irisPositions[1].ledIndices[3] = 0;  // EYE_1 bottom (duplicate center for now)
+  irisPositions[1].ledIndices[4] = 1;  // EYE_1 left
+  irisPositions[1].ledIndices[5] = 2;  // EYE_1 left
+  irisPositions[1].ledIndices[6] = 39; // EYE_1 left
+  irisPositions[1].ledIndices[7] = 25; // EYE_1 left
+  irisPositions[1].ledIndices[8] = 40; // EYE_1 left
 
   // NORTHEAST (2) - Looking up-right
-  irisPositions[2].ledCount = 5;
-  irisPositions[2].ledIndices[0] = 3;  // EYE_0 (center)
-  irisPositions[2].ledIndices[1] = 26; // EYE_1 right
-  irisPositions[2].ledIndices[2] = 41; // EYE_2 top-right
-  irisPositions[2].ledIndices[3] = 25; // EYE_2 right
-  irisPositions[2].ledIndices[4] = 27; // EYE_3 top-right
+  irisPositions[2].ledCount = 10;
+  irisPositions[2].ledIndices[0] = 26; // EYE_0 (center)
+  irisPositions[2].ledIndices[1] = 1;  // EYE_1 top
+  irisPositions[2].ledIndices[2] = 2;  // EYE_1 right
+  irisPositions[2].ledIndices[3] = 3;  // EYE_1 bottom (duplicate center for now)
+  irisPositions[2].ledIndices[4] = 4;  // EYE_1 left
+  irisPositions[2].ledIndices[5] = 5;  // EYE_1 left
+  irisPositions[2].ledIndices[6] = 25; // EYE_1 left
+  irisPositions[2].ledIndices[7] = 27; // EYE_1 left
+  irisPositions[2].ledIndices[8] = 41; // EYE_1 left
+  irisPositions[2].ledIndices[9] = 42; // EYE_1 left
 
   // EAST (3) - Looking right
-  irisPositions[3].ledCount = 5;
+  irisPositions[3].ledCount = 9;
   irisPositions[3].ledIndices[0] = 28; // EYE_0 (center)
-  irisPositions[3].ledIndices[1] = 6;  // EYE_1 right
-  irisPositions[3].ledIndices[2] = 43; // EYE_2 right
-  irisPositions[3].ledIndices[3] = 27; // EYE_2 bottom-right
-  irisPositions[3].ledIndices[4] = 29; // EYE_3 right
+  irisPositions[3].ledIndices[1] = 4;  // EYE_1 top
+  irisPositions[3].ledIndices[2] = 5;  // EYE_1 right
+  irisPositions[3].ledIndices[3] = 6;  // EYE_1 bottom (duplicate center for now)
+  irisPositions[3].ledIndices[4] = 7;  // EYE_1 left
+  irisPositions[3].ledIndices[5] = 8;  // EYE_1 left
+  irisPositions[3].ledIndices[6] = 27; // EYE_1 left
+  irisPositions[3].ledIndices[7] = 29; // EYE_1 left
+  irisPositions[3].ledIndices[8] = 43; // EYE_1 left
 
   // SOUTHEAST (4) - Looking down-right
-  irisPositions[4].ledCount = 5;
-  irisPositions[4].ledIndices[0] = 9;  // EYE_0 (center)
-  irisPositions[4].ledIndices[1] = 30; // EYE_1 bottom
-  irisPositions[4].ledIndices[2] = 29; // EYE_2 bottom-right
-  irisPositions[4].ledIndices[3] = 31; // EYE_2 bottom
-  irisPositions[4].ledIndices[4] = 44; // EYE_3 bottom-right
+  irisPositions[4].ledCount = 10;
+  irisPositions[4].ledIndices[0] = 30; // EYE_0 (center)
+  irisPositions[4].ledIndices[1] = 7;  // EYE_1 top
+  irisPositions[4].ledIndices[2] = 8;  // EYE_1 right
+  irisPositions[4].ledIndices[3] = 9;  // EYE_1 bottom (duplicate center for now)
+  irisPositions[4].ledIndices[4] = 10; // EYE_1 left
+  irisPositions[4].ledIndices[5] = 11; // EYE_1 left
+  irisPositions[4].ledIndices[6] = 29; // EYE_1 left
+  irisPositions[4].ledIndices[7] = 31; // EYE_1 left
+  irisPositions[4].ledIndices[8] = 44; // EYE_1 left
+  irisPositions[4].ledIndices[9] = 45; // EYE_1 left
 
   // SOUTH (5) - Looking down
-  irisPositions[5].ledCount = 5;
-  irisPositions[5].ledIndices[0] = 46; // EYE_0 (center)
-  irisPositions[5].ledIndices[1] = 32; // EYE_1 bottom
-  irisPositions[5].ledIndices[2] = 12; // EYE_2 bottom-right
-  irisPositions[5].ledIndices[3] = 33; // EYE_2 bottom
-  irisPositions[5].ledIndices[4] = 31; // EYE_2 bottom-left
+  irisPositions[5].ledCount = 9;
+  irisPositions[5].ledIndices[0] = 32; // EYE_0 (center)
+  irisPositions[5].ledIndices[1] = 10; // EYE_1 top
+  irisPositions[5].ledIndices[2] = 11; // EYE_1 right
+  irisPositions[5].ledIndices[3] = 12; // EYE_1 bottom (duplicate center for now)
+  irisPositions[5].ledIndices[4] = 13; // EYE_1 left
+  irisPositions[5].ledIndices[5] = 14; // EYE_1 left
+  irisPositions[5].ledIndices[6] = 31; // EYE_1 left
+  irisPositions[5].ledIndices[7] = 33; // EYE_1 left
+  irisPositions[5].ledIndices[8] = 46; // EYE_1 left
 
   // SOUTHWEST (6) - Looking down-left
-  irisPositions[6].ledCount = 5;
-  irisPositions[6].ledIndices[0] = 15; // EYE_0 (center)
-  irisPositions[6].ledIndices[1] = 34; // EYE_1 left
-  irisPositions[6].ledIndices[2] = 56; // EYE_2 bottom-left
-  irisPositions[6].ledIndices[3] = 35; // EYE_2 bottom
-  irisPositions[6].ledIndices[4] = 33; // EYE_3 bottom-left
+  irisPositions[6].ledCount = 10;
+  irisPositions[6].ledIndices[0] = 34; // EYE_0 (center)
+  irisPositions[6].ledIndices[1] = 13; // EYE_1 top
+  irisPositions[6].ledIndices[2] = 14; // EYE_1 right
+  irisPositions[6].ledIndices[3] = 15; // EYE_1 bottom (duplicate center for now)
+  irisPositions[6].ledIndices[4] = 16; // EYE_1 left
+  irisPositions[6].ledIndices[5] = 17; // EYE_1 left
+  irisPositions[6].ledIndices[6] = 33; // EYE_1 left
+  irisPositions[6].ledIndices[7] = 35; // EYE_1 left
+  irisPositions[6].ledIndices[8] = 47; // EYE_1 left
+  irisPositions[6].ledIndices[9] = 48; // EYE_1 left
 
   // WEST (7) - Looking left
-  irisPositions[7].ledCount = 5;
-  irisPositions[7].ledIndices[0] = 18; // EYE_0 (center)
-  irisPositions[7].ledIndices[1] = 36; // EYE_1 left
-  irisPositions[7].ledIndices[2] = 37; // EYE_2 left
-  irisPositions[7].ledIndices[3] = 35; // EYE_2 top-left
-  irisPositions[7].ledIndices[4] = 49; // EYE_3 left
+  irisPositions[7].ledCount = 9;
+  irisPositions[7].ledIndices[0] = 36; // EYE_0 (center)
+  irisPositions[7].ledIndices[1] = 16; // EYE_1 left
+  irisPositions[7].ledIndices[2] = 17; // EYE_1 left
+  irisPositions[7].ledIndices[3] = 18; // EYE_1 left
+  irisPositions[7].ledIndices[4] = 19; // EYE_1 left
+  irisPositions[7].ledIndices[5] = 20; // EYE_1 left
+  irisPositions[7].ledIndices[6] = 35; // EYE_1 left
+  irisPositions[7].ledIndices[7] = 37; // EYE_1 left
+  irisPositions[7].ledIndices[8] = 49; // EYE_1 left
 
   // NORTHWEST (8) - Looking up-left
-  irisPositions[8].ledCount = 5;
-  irisPositions[8].ledIndices[0] = 21; // EYE_0 (center)
-  irisPositions[8].ledIndices[1] = 38; // EYE_1 top
-  irisPositions[8].ledIndices[2] = 39; // EYE_2 top-left
-  irisPositions[8].ledIndices[3] = 50; // EYE_2 left
-  irisPositions[8].ledIndices[4] = 51; // EYE_3 top-left
+  irisPositions[8].ledCount = 10;
+  irisPositions[8].ledIndices[0] = 38; // EYE_0 (center)
+  irisPositions[8].ledIndices[1] = 19; // EYE_1 top
+  irisPositions[8].ledIndices[2] = 20; // EYE_1 right
+  irisPositions[8].ledIndices[3] = 21; // EYE_1 bottom (duplicate center for now)
+  irisPositions[8].ledIndices[4] = 22; // EYE_1 left
+  irisPositions[8].ledIndices[5] = 23; // EYE_1 left
+  irisPositions[8].ledIndices[6] = 37; // EYE_1 left
+  irisPositions[8].ledIndices[7] = 39; // EYE_1 left
+  irisPositions[8].ledIndices[8] = 50; // EYE_1 left
+  irisPositions[8].ledIndices[9] = 51; // EYE_1 left
 }
 
 void EyeRenderer::updateEyePosition(int joystickX, int joystickY)
@@ -142,7 +182,8 @@ uint8_t EyeRenderer::calculateDirection(int joystickX, int joystickY)
 float EyeRenderer::getAngleDegrees(float x, float y)
 {
   // Calculate angle in degrees, with 0° = North (positive Y)
-  float angle = atan2(x, y) * 180.0f / PI;
+  // Fix coordinate system: negate y to match expected directions
+  float angle = atan2(x, -y) * 180.0f / PI;
 
   // Convert to 0-360 range
   if (angle < 0)

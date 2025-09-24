@@ -365,31 +365,26 @@ public:
 };
 
 /**
- * @brief Ripple effect from center
+ * @brief Ripple effect - bouncing ring pattern
  *
- * Creates ripple waves emanating from the center LED
+ * Creates a single active ring that bounces between innermost and outermost rings
  */
 class RipplePattern : public Pattern
 {
 private:
   SegmentManager *segmentManager;
-  struct Ripple
-  {
-    float radius;
-    uint8_t intensity;
-    bool active;
-  };
-  static const uint8_t MAX_RIPPLES = 3;
-  Ripple ripples[MAX_RIPPLES];
-  unsigned long lastRippleTime;
-  unsigned long rippleInterval;
+  float currentRingPosition; // Current ring position (0.0 to NUM_RINGS-1)
+  bool bouncingOutward;      // Direction of bounce (true = outward, false = inward)
+  float bounceSpeed;         // Speed of ring movement
+  uint8_t ringIntensity;     // Brightness of the active ring
+  unsigned long lastUpdate;  // Last update time for smooth animation
 
 public:
   RipplePattern(CRGB *leds, int numLeds, SegmentManager *segManager, unsigned long interval = 1000);
   bool update(unsigned long currentTime) override;
-  void setRippleInterval(unsigned long interval);
+  void setBounceSpeed(float speed);
   String getName() const override { return "Ripple"; }
-  String getDescription() const override { return "Ripple waves from center"; }
+  String getDescription() const override { return "Bouncing ring between inner and outer rings"; }
 };
 
 /**
@@ -440,13 +435,14 @@ public:
 /**
  * @brief Base class for pole-specific patterns
  *
- * Provides helper methods for pole spiral geometry calculations
+ * Provides helper methods for pole spiral geometry calculations and palette support
  */
 class PolePattern : public Pattern
 {
 protected:
-  CRGB *poleLeds;  // Pointer to pole LED array
-  int poleNumLeds; // Number of pole LEDs
+  CRGB *poleLeds;        // Pointer to pole LED array
+  int poleNumLeds;       // Number of pole LEDs
+  ColorPalette *palette; // Color palette for this pattern
 
   /**
    * @brief Get spiral column for LED index
@@ -470,9 +466,22 @@ protected:
    */
   int getPoleIndex(uint8_t column, uint8_t height) const;
 
+  /**
+   * @brief Get color from palette at position
+   * @param position Position in palette (0.0 to 1.0)
+   * @return CRGB color
+   */
+  CRGB getPaletteColor(float position) const;
+
 public:
   PolePattern(CRGB *leds, int numLeds, CRGB *poleLeds, int poleNumLeds, unsigned long updateInterval = 50);
   virtual ~PolePattern() = default;
+
+  /**
+   * @brief Set color palette for this pattern
+   * @param palette Pointer to ColorPalette
+   */
+  virtual void setPalette(ColorPalette *palette) { this->palette = palette; }
 };
 
 /**
@@ -552,6 +561,28 @@ public:
 };
 
 /**
+ * @brief Bounce pattern for pole
+ *
+ * Creates two waves that bounce up and down in opposite directions
+ */
+class PoleBouncePattern : public PolePattern
+{
+private:
+  float wave1Position; // Position of first wave (0.0 to 1.0)
+  float wave2Position; // Position of second wave (0.0 to 1.0)
+  bool wave1Direction; // True = up, False = down
+  bool wave2Direction; // True = up, False = down
+  uint8_t waveLength;  // Length of each wave
+  uint8_t hueOffset;   // Color offset between waves
+
+public:
+  PoleBouncePattern(CRGB *leds, int numLeds, CRGB *poleLeds, int poleNumLeds);
+  bool update(unsigned long currentTime) override;
+  String getName() const override { return "PoleBounce"; }
+  String getDescription() const override { return "Two waves bouncing up and down in opposite directions"; }
+};
+
+/**
  * @brief Firework action - one-time triggerable firework effect
  *
  * Creates a complete firework effect: white trail up pole, rainbow explosion from center outward, sparkly remnants
@@ -578,7 +609,7 @@ private:
   // Explosion phase (eye rings + clock)
   float explosionRadius;                          // Current explosion radius
   uint8_t explosionHue;                           // Current hue for rainbow effect
-  static const uint32_t EXPLOSION_DURATION = 800; // Explosion animation time
+  static const uint32_t EXPLOSION_DURATION = 267; // Explosion animation time (3x faster)
 
   // Sparkle phase
   struct Sparkle
@@ -592,7 +623,7 @@ private:
 
   static const int MAX_SPARKLES = 30; // Reduced for multiple instances
   Sparkle sparkles[MAX_SPARKLES];
-  static const uint32_t SPARKLE_DURATION = 3000; // 3 seconds of sparkles
+  static const uint32_t SPARKLE_DURATION = 1000; // 1 second of sparkles
 
   // Helper methods
   void updateLaunchPhase(unsigned long currentTime);

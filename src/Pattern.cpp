@@ -613,16 +613,11 @@ void SpiralPattern::setSpiralWidth(uint8_t width)
 // ============================================================================
 
 RipplePattern::RipplePattern(CRGB *leds, int numLeds, SegmentManager *segManager, unsigned long interval)
-    : Pattern(leds, numLeds, 50), segmentManager(segManager), lastRippleTime(0), rippleInterval(interval)
+    : Pattern(leds, numLeds, 50), segmentManager(segManager), currentRingPosition(0.0f),
+      bouncingOutward(true), bounceSpeed(0.02f), ringIntensity(255), lastUpdate(0)
 {
-
-  // Initialize ripples
-  for (uint8_t i = 0; i < MAX_RIPPLES; i++)
-  {
-    ripples[i].radius = 0.0f;
-    ripples[i].intensity = 0;
-    ripples[i].active = false;
-  }
+  // Start at the innermost ring (EYE_0)
+  currentRingPosition = 0.0f;
 }
 
 bool RipplePattern::update(unsigned long currentTime)
@@ -642,58 +637,50 @@ bool RipplePattern::update(unsigned long currentTime)
     return true;
   }
 
-  // Start new ripple if it's time
-  if (currentTime - lastRippleTime > rippleInterval / speed)
+  // Update bounce position based on speed
+  float adjustedSpeed = bounceSpeed * speed; // Apply global speed multiplier
+
+  if (bouncingOutward)
   {
-    for (uint8_t i = 0; i < MAX_RIPPLES; i++)
+    currentRingPosition += adjustedSpeed;
+    // Check if we've reached the outermost ring (including clock)
+    if (currentRingPosition >= 5.0f) // 5 eye rings + clock = 6 total, so max position is 5
     {
-      if (!ripples[i].active)
-      {
-        ripples[i].radius = 0.0f;
-        ripples[i].intensity = 255;
-        ripples[i].active = true;
-        lastRippleTime = currentTime;
-        break;
-      }
+      currentRingPosition = 5.0f;
+      bouncingOutward = false; // Start bouncing inward
+    }
+  }
+  else
+  {
+    currentRingPosition -= adjustedSpeed;
+    // Check if we've reached the innermost ring (EYE_0)
+    if (currentRingPosition <= 0.0f)
+    {
+      currentRingPosition = 0.0f;
+      bouncingOutward = true; // Start bouncing outward
     }
   }
 
-  // Update and draw ripples
-  for (uint8_t i = 0; i < MAX_RIPPLES; i++)
+  // Determine which ring to light up
+  uint8_t activeRing = (uint8_t)round(currentRingPosition);
+
+  // Get color from palette based on ring position
+  float colorPos = currentRingPosition / 5.0f; // Normalize to 0.0-1.0
+  CRGB ringColor = currentPalette->getColorSmooth(colorPos);
+  ringColor.nscale8(brightness);
+
+  // Light up the active ring
+  if (activeRing < segmentManager->getSegmentCount())
   {
-    if (ripples[i].active)
-    {
-      // Expand ripple
-      ripples[i].radius += speed * 0.05f;
-      ripples[i].intensity = max(0, (int)ripples[i].intensity - (int)(speed * 8));
-
-      // Deactivate if fully faded
-      if (ripples[i].intensity <= 0 || ripples[i].radius > NUM_EYE_RINGS)
-      {
-        ripples[i].active = false;
-        continue;
-      }
-
-      // Draw ripple on appropriate rings
-      uint8_t ringIndex = (uint8_t)ripples[i].radius;
-      if (ringIndex < segmentManager->getSegmentCount())
-      {
-        float colorPos = (float)i / (float)MAX_RIPPLES;
-        CRGB color = currentPalette->getColorSmooth(colorPos);
-        color.nscale8(ripples[i].intensity);
-
-        // Fill the ring with ripple color
-        segmentManager->fillSegment(leds, ringIndex, color);
-      }
-    }
+    segmentManager->fillSegment(leds, activeRing, ringColor);
   }
 
   return true;
 }
 
-void RipplePattern::setRippleInterval(unsigned long interval)
+void RipplePattern::setBounceSpeed(float speed)
 {
-  rippleInterval = constrain(interval, 200, 5000);
+  bounceSpeed = constrain(speed, 0.01f, 0.1f); // Reasonable speed range
 }
 
 // ============================================================================
@@ -854,7 +841,7 @@ void SegmentTestPattern::setSegmentInterval(unsigned long interval)
 
 // Base PolePattern class implementation
 PolePattern::PolePattern(CRGB *leds, int numLeds, CRGB *poleLeds, int poleNumLeds, unsigned long updateInterval)
-    : Pattern(leds, numLeds, updateInterval), poleLeds(poleLeds), poleNumLeds(poleNumLeds)
+    : Pattern(leds, numLeds, updateInterval), poleLeds(poleLeds), poleNumLeds(poleNumLeds), palette(nullptr)
 {
 }
 
@@ -877,6 +864,20 @@ int PolePattern::getPoleIndex(uint8_t column, uint8_t height) const
 
   int index = height * POLE_SPIRAL_REPEAT + column;
   return (index < poleNumLeds) ? index : -1;
+}
+
+CRGB PolePattern::getPaletteColor(float position) const
+{
+  if (palette)
+  {
+    return palette->getColorSmooth(position);
+  }
+  else
+  {
+    // Fallback to rainbow if no palette set
+    uint8_t hue = (uint8_t)(position * 255.0f);
+    return CHSV(hue, 255, 255);
+  }
 }
 
 // PoleColumnWavePattern implementation
@@ -931,14 +932,12 @@ bool PoleColumnWavePattern::update(unsigned long currentTime)
         int ledIndex = getPoleIndex(col, height);
         if (ledIndex >= 0)
         {
-          // Create rainbow colors based on column and height
-          uint8_t hue = (col * 20 + height * 5 + (uint8_t)(currentTime / 50)) % 255;
-          uint8_t sat = 255;
-          uint8_t val = (uint8_t)(intensity * brightness);
+          // Use palette colors based on column and height position
+          float palettePosition = ((float)col / POLE_SPIRAL_REPEAT + (float)height / POLE_HEIGHT_LEVELS + (currentTime / 5000.0f)) / 2.0f;
+          palettePosition = fmod(palettePosition, 1.0f); // Wrap to 0.0-1.0
 
-          CHSV hsvColor(hue, sat, val);
-          CRGB rgbColor;
-          hsv2rgb_rainbow(hsvColor, rgbColor);
+          CRGB rgbColor = getPaletteColor(palettePosition);
+          rgbColor.nscale8((uint8_t)(intensity * brightness));
 
           poleLeds[ledIndex] = rgbColor;
         }
@@ -988,14 +987,12 @@ bool PoleSpiralChasePattern::update(unsigned long currentTime)
     // Calculate fade based on position in chase tail
     float fade = 1.0f - ((float)i / (float)chaseLength);
 
-    // Calculate hue based on position and time
-    uint8_t hue = (hueShift + ledIndex * 2) % 255;
-    uint8_t sat = 255;
-    uint8_t val = (uint8_t)(fade * brightness);
+    // Use palette color based on position
+    float palettePosition = ((float)ledIndex / (float)poleNumLeds + hueShift / 255.0f);
+    palettePosition = fmod(palettePosition, 1.0f); // Wrap to 0.0-1.0
 
-    CHSV hsvColor(hue, sat, val);
-    CRGB rgbColor;
-    hsv2rgb_rainbow(hsvColor, rgbColor);
+    CRGB rgbColor = getPaletteColor(palettePosition);
+    rgbColor.nscale8((uint8_t)(fade * brightness));
 
     poleLeds[ledIndex] = rgbColor;
   }
@@ -1059,14 +1056,12 @@ bool PoleHelixPattern::update(unsigned long currentTime)
         // Calculate intensity based on distance from helix center
         float intensity = 1.0f - (columnDistance / 1.5f);
 
-        // Calculate color based on helix and height
-        uint8_t hue = (helix * 85 + height * 5 + (uint8_t)(currentTime / 100)) % 255;
-        uint8_t sat = 255;
-        uint8_t val = (uint8_t)(intensity * brightness);
+        // Use palette color based on helix and height
+        float palettePosition = ((float)helix / (float)numHelixes + (float)height / POLE_HEIGHT_LEVELS + currentTime / 10000.0f);
+        palettePosition = fmod(palettePosition, 1.0f); // Wrap to 0.0-1.0
 
-        CHSV hsvColor(hue, sat, val);
-        CRGB rgbColor;
-        hsv2rgb_rainbow(hsvColor, rgbColor);
+        CRGB rgbColor = getPaletteColor(palettePosition);
+        rgbColor.nscale8((uint8_t)(intensity * brightness));
 
         poleLeds[i] = rgbColor;
       }
@@ -1116,15 +1111,122 @@ bool PoleFirePattern::update(unsigned long currentTime)
     heat[y] = qadd8(heat[y], random8(160, 255));
   }
 
-  // Step 4: Map heat to LED colors
+  // Step 4: Map heat to LED colors using palette
   for (int j = 0; j < poleNumLeds; j++)
   {
-    CRGB color = HeatColor(heat[j]);
+    // Map heat to palette position (0.0 = cool, 1.0 = hot)
+    float palettePosition = (float)heat[j] / 255.0f;
+    CRGB color = getPaletteColor(palettePosition);
 
     // Scale brightness
     color.nscale8(brightness);
 
     poleLeds[j] = color;
+  }
+
+  lastUpdate = currentTime;
+  return true;
+}
+
+// PoleBouncePattern implementation
+PoleBouncePattern::PoleBouncePattern(CRGB *leds, int numLeds, CRGB *poleLeds, int poleNumLeds)
+    : PolePattern(leds, numLeds, poleLeds, poleNumLeds, 40),
+      wave1Position(0.0f),
+      wave2Position(0.5f),   // Start second wave at middle
+      wave1Direction(true),  // Wave 1 starts going up
+      wave2Direction(false), // Wave 2 starts going down
+      waveLength(30),
+      hueOffset(128) // 180 degrees apart in hue
+{
+}
+
+bool PoleBouncePattern::update(unsigned long currentTime)
+{
+  if (!isActive || (currentTime - lastUpdate) < updateInterval)
+  {
+    return false;
+  }
+
+  // Clear pole LEDs
+  fill_solid(poleLeds, poleNumLeds, CRGB::Black);
+
+  // Update wave positions
+  float waveSpeed = speed * 0.01f; // Adjust speed scaling
+
+  // Update wave 1
+  if (wave1Direction) // Going up
+  {
+    wave1Position += waveSpeed;
+    if (wave1Position >= 1.0f)
+    {
+      wave1Position = 1.0f;
+      wave1Direction = false; // Bounce down
+    }
+  }
+  else // Going down
+  {
+    wave1Position -= waveSpeed;
+    if (wave1Position <= 0.0f)
+    {
+      wave1Position = 0.0f;
+      wave1Direction = true; // Bounce up
+    }
+  }
+
+  // Update wave 2 (opposite direction)
+  if (wave2Direction) // Going up
+  {
+    wave2Position += waveSpeed;
+    if (wave2Position >= 1.0f)
+    {
+      wave2Position = 1.0f;
+      wave2Direction = false; // Bounce down
+    }
+  }
+  else // Going down
+  {
+    wave2Position -= waveSpeed;
+    if (wave2Position <= 0.0f)
+    {
+      wave2Position = 0.0f;
+      wave2Direction = true; // Bounce up
+    }
+  }
+
+  // Render both waves
+  for (int i = 0; i < poleNumLeds; i++)
+  {
+    float ledPosition = (float)i / (float)(poleNumLeds - 1); // 0.0 to 1.0
+
+    CRGB finalColor = CRGB::Black;
+
+    // Calculate wave 1 contribution
+    float wave1Distance = abs(ledPosition - wave1Position);
+    if (wave1Distance <= (float)waveLength / (float)poleNumLeds)
+    {
+      float wave1Intensity = 1.0f - (wave1Distance / ((float)waveLength / (float)poleNumLeds));
+      float wave1PalettePos = (ledPosition + currentTime / 5000.0f);
+      wave1PalettePos = fmod(wave1PalettePos, 1.0f);
+
+      CRGB wave1Color = getPaletteColor(wave1PalettePos);
+      wave1Color.nscale8((uint8_t)(wave1Intensity * brightness));
+      finalColor += wave1Color;
+    }
+
+    // Calculate wave 2 contribution
+    float wave2Distance = abs(ledPosition - wave2Position);
+    if (wave2Distance <= (float)waveLength / (float)poleNumLeds)
+    {
+      float wave2Intensity = 1.0f - (wave2Distance / ((float)waveLength / (float)poleNumLeds));
+      float wave2PalettePos = (ledPosition + hueOffset / 255.0f + currentTime / 5000.0f);
+      wave2PalettePos = fmod(wave2PalettePos, 1.0f);
+
+      CRGB wave2Color = getPaletteColor(wave2PalettePos);
+      wave2Color.nscale8((uint8_t)(wave2Intensity * brightness));
+      finalColor += wave2Color;
+    }
+
+    poleLeds[i] = finalColor;
   }
 
   lastUpdate = currentTime;
@@ -1283,6 +1385,12 @@ void FireworkAction::updateExplosionPhase(unsigned long currentTime)
   unsigned long phaseElapsed = currentTime - phaseStartTime;
   float progress = (float)phaseElapsed / (float)EXPLOSION_DURATION;
 
+  // Clear main LEDs first to ensure explosion is visible
+  if (leds && numLeds > 0)
+  {
+    fill_solid(leds, numLeds, CRGB::Black);
+  }
+
   // Explosion radiates from center (EYE_0) outward
   explosionRadius = progress * 6.0f; // 6 rings total (5 eye + 1 clock)
 
@@ -1299,14 +1407,15 @@ void FireworkAction::updateExplosionPhase(unsigned long currentTime)
     {
       // Calculate intensity based on how recently this ring was hit
       float ringAge = explosionRadius - ringDistance;
-      float intensity = 1.0f - (ringAge / 2.0f); // Fade over 2 ring distances
+      float intensity = 1.0f - (ringAge / 3.0f); // Fade over 3 ring distances (slower fade)
       intensity = max(0.0f, min(1.0f, intensity));
 
       if (intensity > 0.0f)
       {
         // Calculate ring color (rainbow effect)
         uint8_t ringHue = (explosionHue + ring * 40) % 255;
-        uint8_t ringBrightness = (uint8_t)(intensity * brightness);
+        // Ensure minimum brightness for visibility, scale with intensity
+        uint8_t ringBrightness = (uint8_t)(max(100.0f, intensity * 255.0f)); // Minimum 100 brightness
 
         CHSV hsvColor(ringHue, 255, ringBrightness);
         CRGB rgbColor;
@@ -1315,31 +1424,31 @@ void FireworkAction::updateExplosionPhase(unsigned long currentTime)
         // Light up the appropriate ring
         if (ring < 5)
         {
-          // Eye rings (EYE_4 to EYE_0)
-          int segmentType = SEGMENT_EYE_4 + ring;
+          // Eye rings (EYE_0 to EYE_4) - center to outer
+          int segmentType = SEGMENT_EYE_0 - ring; // Subtract to go from center (4) outward to (0)
           int startLED, count;
 
           switch (segmentType)
           {
-          case SEGMENT_EYE_4:
-            startLED = EYE_4_START;
-            count = EYE_4_COUNT;
+          case SEGMENT_EYE_0: // ring 0 - center
+            startLED = EYE_0_START;
+            count = EYE_0_COUNT;
             break;
-          case SEGMENT_EYE_3:
-            startLED = EYE_3_START;
-            count = EYE_3_COUNT;
-            break;
-          case SEGMENT_EYE_2:
-            startLED = EYE_2_START;
-            count = EYE_2_COUNT;
-            break;
-          case SEGMENT_EYE_1:
+          case SEGMENT_EYE_1: // ring 1
             startLED = EYE_1_START;
             count = EYE_1_COUNT;
             break;
-          case SEGMENT_EYE_0:
-            startLED = EYE_0_START;
-            count = EYE_0_COUNT;
+          case SEGMENT_EYE_2: // ring 2
+            startLED = EYE_2_START;
+            count = EYE_2_COUNT;
+            break;
+          case SEGMENT_EYE_3: // ring 3
+            startLED = EYE_3_START;
+            count = EYE_3_COUNT;
+            break;
+          case SEGMENT_EYE_4: // ring 4 - outermost
+            startLED = EYE_4_START;
+            count = EYE_4_COUNT;
             break;
           default:
             continue;
