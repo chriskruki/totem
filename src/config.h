@@ -127,6 +127,10 @@ const uint16_t SPEED_LED_POSITIONS[SPEED_PREVIEW_LEDS] = {
 #define WEB_SERVER_PORT 80          // HTTP server port
 #define WEB_UPDATE_INTERVAL 1000    // Web status update interval (ms)
 
+// Power Optimization Configuration
+#define ENABLE_CPU_FREQUENCY_REDUCTION true // Reduce CPU frequency when wireless is disabled
+#define POWER_OPTIMIZED_CPU_FREQ 160        // CPU frequency in MHz when power optimized (80, 160, or 240)
+
 // Captive Portal Configuration
 #define ENABLE_CAPTIVE_PORTAL false        // Enable captive portal functionality
 #define DNS_SERVER_PORT 53                 // DNS server port for captive portal

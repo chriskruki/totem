@@ -69,8 +69,6 @@ bool SolidPattern::update(unsigned long currentTime)
 
   lastUpdate = currentTime;
 
-  lastUpdate = currentTime;
-
   // Get color from palette or use default color
   CRGB scaledColor;
   if (currentPalette)

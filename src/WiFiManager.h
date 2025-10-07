@@ -5,6 +5,8 @@
 #include <WiFi.h>
 #include <WebServer.h>
 #include <DNSServer.h>
+#include <esp_wifi.h>
+#include <esp_bt.h>
 
 // Forward declaration
 class LEDDriver;
@@ -55,6 +57,12 @@ public:
    * @brief Initialize WiFi manager (call in setup())
    */
   void initialize();
+
+  /**
+   * @brief Completely disable all wireless functionality (WiFi + Bluetooth)
+   * This provides maximum power savings by shutting down all radio modules
+   */
+  void disableAllWireless();
 
   /**
    * @brief Update WiFi manager (call in main loop)
