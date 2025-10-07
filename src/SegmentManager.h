@@ -9,11 +9,12 @@
  */
 struct LEDSegment
 {
-  uint16_t startIndex; // Starting LED index in the strip
-  uint16_t count;      // Number of LEDs in this segment
-  uint16_t endIndex;   // Last LED index in this segment
-  uint8_t segmentType; // Segment type (SEGMENT_EYE_4, etc.)
-  const char *name;    // Human-readable name
+  uint16_t rawStartIndex;     // Starting raw LED index (physical wiring)
+  uint16_t count;             // Number of LEDs in this segment
+  uint16_t rawEndIndex;       // Last raw LED index (physical wiring)
+  uint8_t segmentType;        // Segment type (SEGMENT_CLOCK, SEGMENT_EYE_X, etc.)
+  const char *name;           // Human-readable name
+  const uint16_t *logicalMap; // Pointer to logical→raw mapping array (or nullptr for EYE_0)
 };
 
 /**
@@ -114,11 +115,12 @@ public:
   const LEDSegment *getAllSegments() const { return segments; }
 
   /**
-   * @brief Check if a segment should have its direction reversed
-   * @param segmentType The segment type to check
-   * @return True if segment direction should be reversed
+   * @brief Get raw LED index from logical index within a segment
+   * @param segmentType The segment type
+   * @param logicalIndex Logical LED index (0 = 12 o'clock)
+   * @return Raw LED index, or -1 if invalid
    */
-  bool isSegmentReversed(uint8_t segmentType) const;
+  int16_t getRawLEDIndex(uint8_t segmentType, uint16_t logicalIndex) const;
 
   /**
    * @brief Check if a segment type is valid

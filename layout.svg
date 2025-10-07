@@ -1,0 +1,365 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 800" width="1400" height="800">
+  <defs>
+    <style>
+      .title { font: bold 24px sans-serif; fill: #333; }
+      .subtitle { font: bold 18px sans-serif; fill: #666; }
+      .label { font: 12px sans-serif; fill: #333; }
+      .led-label { font: bold 10px monospace; fill: white; text-anchor: middle; }
+      .ring-label { font: bold 14px sans-serif; fill: #555; text-anchor: middle; }
+      .info-text { font: 11px sans-serif; fill: #666; }
+      .clock-led { fill: #4CAF50; stroke: #2E7D32; stroke-width: 1; }
+      .eye4-led { fill: #2196F3; stroke: #0D47A1; stroke-width: 1; }
+      .eye3-led { fill: #03A9F4; stroke: #01579B; stroke-width: 1; }
+      .eye2-led { fill: #00BCD4; stroke: #006064; stroke-width: 1; }
+      .eye1-led { fill: #00E5FF; stroke: #0097A7; stroke-width: 1; }
+      .eye0-led { fill: #FF5722; stroke: #BF360C; stroke-width: 2; }
+      .direction-arrow { fill: none; stroke: #FF9800; stroke-width: 3; marker-end: url(#arrowhead);
+      }
+      .clock-direction { fill: none; stroke: #8BC34A; stroke-width: 3; marker-end:
+      url(#arrowhead-clock); }
+      .legend-box { fill: white; stroke: #ccc; stroke-width: 1; }
+      .grid-line { stroke: #ddd; stroke-width: 1; stroke-dasharray: 5,5; }
+    </style>
+    <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#FF9800" />
+    </marker>
+    <marker id="arrowhead-clock" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <polygon points="0 0, 10 3, 0 6" fill="#8BC34A" />
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1400" height="800" fill="#f5f5f5" />
+
+  <!-- ===== RAW LED INDICES (LEFT SIDE) ===== -->
+  <g id="raw-indices">
+    <!-- Title -->
+    <text x="350" y="30" class="title" text-anchor="middle">Raw LED Indices (Physical Wiring)</text>
+    <text x="350" y="55" class="subtitle" text-anchor="middle">Data Flow: Clock (0-100) → Eye
+      (101-161)</text>
+
+    <!-- Clock Ring (Raw) -->
+    <g id="clock-raw" transform="translate(350, 280)">
+      <!-- Ring circle -->
+      <circle cx="0" cy="0" r="200" fill="none" stroke="#4CAF50" stroke-width="2"
+        stroke-dasharray="5,5" />
+
+      <!-- Clock LEDs (showing key positions) -->
+      <!-- 6 o'clock (0) -->
+      <circle cx="0" cy="200" r="8" class="clock-led" />
+      <text x="0" y="204" class="led-label">0</text>
+      <text x="0" y="225" class="info-text" text-anchor="middle">6 o'clock</text>
+
+      <!-- 9 o'clock (25-26) -->
+      <circle cx="-200" cy="0" r="8" class="clock-led" />
+      <text x="-200" y="4" class="led-label">26</text>
+      <text x="-200" y="-15" class="info-text" text-anchor="middle">9 o'clock</text>
+
+      <!-- 12 o'clock (50-51) -->
+      <circle cx="0" cy="-200" r="8" class="clock-led" />
+      <text x="0" y="-196" class="led-label">51</text>
+      <text x="0" y="-215" class="info-text" text-anchor="middle">12 o'clock</text>
+
+      <!-- 3 o'clock (75-76) -->
+      <circle cx="200" cy="0" r="8" class="clock-led" />
+      <text x="200" y="4" class="led-label">76</text>
+      <text x="200" y="-15" class="info-text" text-anchor="middle">3 o'clock</text>
+
+      <!-- Additional LEDs for context -->
+      <circle cx="141" cy="141" r="6" class="clock-led" />
+      <text x="141" y="144" class="led-label" font-size="8">13</text>
+
+      <circle cx="-141" cy="141" r="6" class="clock-led" />
+      <text x="-141" y="144" class="led-label" font-size="8">38</text>
+
+      <circle cx="-141" cy="-141" r="6" class="clock-led" />
+      <text x="-141" y="-138" class="led-label" font-size="8">64</text>
+
+      <circle cx="141" cy="-141" r="6" class="clock-led" />
+      <text x="141" y="-138" class="led-label" font-size="8">89</text>
+
+      <!-- Direction arrow (counter-clockwise) -->
+      <path d="M 50,190 A 180 180 0 0 0 -50,190" class="clock-direction" />
+      <text x="0" y="250" class="info-text" text-anchor="middle" font-style="italic">Counter-clockwise
+        →</text>
+
+      <!-- Label -->
+      <text x="0" y="0" class="ring-label">CLOCK</text>
+      <text x="0" y="18" class="info-text" text-anchor="middle">101 LEDs (0-100)</text>
+    </g>
+
+    <!-- Eye Rings (Raw) -->
+    <g id="eye-raw" transform="translate(350, 280)">
+      <!-- EYE_4 (Outermost) -->
+      <circle cx="0" cy="0" r="155" fill="none" stroke="#2196F3" stroke-width="2"
+        stroke-dasharray="5,5" />
+      <!-- Key positions -->
+      <circle cx="0" cy="155" r="7" class="eye4-led" />
+      <text x="0" y="159" class="led-label">101</text>
+
+      <circle cx="0" cy="-155" r="7" class="eye4-led" />
+      <text x="0" y="-151" class="led-label">113</text>
+
+      <circle cx="155" cy="0" r="7" class="eye4-led" />
+      <text x="155" y="4" class="led-label">119</text>
+
+      <circle cx="-155" cy="0" r="7" class="eye4-led" />
+      <text x="-155" y="4" class="led-label">107</text>
+
+      <circle cx="110" cy="110" r="6" class="eye4-led" />
+      <text x="110" y="113" class="led-label" font-size="8">122</text>
+
+      <text x="0" y="-170" class="info-text" text-anchor="middle">EYE_4: 24 LEDs (101-124)</text>
+
+      <!-- EYE_3 -->
+      <circle cx="0" cy="0" r="120" fill="none" stroke="#03A9F4" stroke-width="2"
+        stroke-dasharray="5,5" />
+      <circle cx="0" cy="120" r="6" class="eye3-led" />
+      <text x="0" y="123" class="led-label" font-size="9">125</text>
+
+      <circle cx="0" cy="-120" r="6" class="eye3-led" />
+      <text x="0" y="-117" class="led-label" font-size="9">133</text>
+
+      <circle cx="120" cy="0" r="6" class="eye3-led" />
+      <text x="120" y="3" class="led-label" font-size="9">137</text>
+
+      <circle cx="-120" cy="0" r="6" class="eye3-led" />
+      <text x="-120" y="3" class="led-label" font-size="9">129</text>
+
+      <text x="0" y="-135" class="info-text" text-anchor="middle">EYE_3: 16 LEDs (125-140)</text>
+
+      <!-- EYE_2 -->
+      <circle cx="0" cy="0" r="85" fill="none" stroke="#00BCD4" stroke-width="2"
+        stroke-dasharray="5,5" />
+      <circle cx="0" cy="85" r="5" class="eye2-led" />
+      <text x="0" y="88" class="led-label" font-size="8">141</text>
+
+      <circle cx="0" cy="-85" r="5" class="eye2-led" />
+      <text x="0" y="-82" class="led-label" font-size="8">147</text>
+
+      <circle cx="85" cy="0" r="5" class="eye2-led" />
+      <text x="85" y="3" class="led-label" font-size="8">150</text>
+
+      <circle cx="-85" cy="0" r="5" class="eye2-led" />
+      <text x="-85" y="3" class="led-label" font-size="8">144</text>
+
+      <text x="0" y="-100" class="info-text" text-anchor="middle">EYE_2: 12 LEDs (141-152)</text>
+
+      <!-- EYE_1 -->
+      <circle cx="0" cy="0" r="50" fill="none" stroke="#00E5FF" stroke-width="2"
+        stroke-dasharray="5,5" />
+      <circle cx="0" cy="50" r="4" class="eye1-led" />
+      <text x="0" y="52" class="led-label" font-size="7">153</text>
+
+      <circle cx="0" cy="-50" r="4" class="eye1-led" />
+      <text x="0" y="-48" class="led-label" font-size="7">157</text>
+
+      <circle cx="50" cy="0" r="4" class="eye1-led" />
+      <text x="50" y="2" class="led-label" font-size="7">159</text>
+
+      <circle cx="-50" cy="0" r="4" class="eye1-led" />
+      <text x="-50" y="2" class="led-label" font-size="7">155</text>
+
+      <text x="0" y="-65" class="info-text" text-anchor="middle">EYE_1: 8 LEDs (153-160)</text>
+
+      <!-- EYE_0 (Center) -->
+      <circle cx="0" cy="0" r="10" class="eye0-led" />
+      <text x="0" y="4" class="led-label">161</text>
+      <text x="0" y="30" class="info-text" text-anchor="middle">EYE_0: 1 LED</text>
+
+      <!-- Direction arrow (clockwise) -->
+      <path d="M 50,145 A 140 140 0 0 1 -50,145" class="direction-arrow" />
+      <text x="0" y="180" class="info-text" text-anchor="middle" font-style="italic">Clockwise →</text>
+    </g>
+
+    <!-- Info box -->
+    <rect x="50" y="600" width="600" height="180" class="legend-box" />
+    <text x="70" y="625" class="subtitle">Raw Index Information:</text>
+    <text x="70" y="650" class="info-text">• Clock: Raw indices 0-100 (101 total LEDs)</text>
+    <text x="70" y="670" class="info-text"> - Starts at 6 o'clock (index 0)</text>
+    <text x="70" y="690" class="info-text"> - Flows counter-clockwise</text>
+    <text x="70" y="710" class="info-text"> - Index 51 = 12 o'clock (top)</text>
+    <text x="70" y="735" class="info-text">• Eye: Raw indices 101-161 (61 total LEDs)</text>
+    <text x="70" y="755" class="info-text"> - Starts at 6 o'clock on EYE_4 (index 101)</text>
+    <text x="70" y="775" class="info-text"> - Flows clockwise through all rings</text>
+  </g>
+
+  <!-- Vertical divider -->
+  <line x1="700" y1="0" x2="700" y2="800" class="grid-line" stroke-width="2" />
+
+  <!-- ===== LOGICAL LED INDICES (RIGHT SIDE) ===== -->
+  <g id="logical-indices">
+    <!-- Title -->
+    <text x="1050" y="30" class="title" text-anchor="middle">Logical LED Indices (Code Usage)</text>
+    <text x="1050" y="55" class="subtitle" text-anchor="middle">All segments: Index 0 = 12 o'clock
+      (top)</text>
+
+    <!-- Clock Ring (Logical) -->
+    <g id="clock-logical" transform="translate(1050, 280)">
+      <!-- Ring circle -->
+      <circle cx="0" cy="0" r="200" fill="none" stroke="#4CAF50" stroke-width="2"
+        stroke-dasharray="5,5" />
+
+      <!-- Clock LEDs (logical positions) -->
+      <!-- 12 o'clock (0) -->
+      <circle cx="0" cy="-200" r="8" class="clock-led" />
+      <text x="0" y="-196" class="led-label">0</text>
+      <text x="0" y="-215" class="info-text" text-anchor="middle">12 o'clock</text>
+
+      <!-- 3 o'clock (25) -->
+      <circle cx="200" cy="0" r="8" class="clock-led" />
+      <text x="200" y="4" class="led-label">25</text>
+      <text x="200" y="-15" class="info-text" text-anchor="middle">3 o'clock</text>
+
+      <!-- 6 o'clock (50) -->
+      <circle cx="0" cy="200" r="8" class="clock-led" />
+      <text x="0" y="204" class="led-label">50</text>
+      <text x="0" y="225" class="info-text" text-anchor="middle">6 o'clock</text>
+
+      <!-- 9 o'clock (75) -->
+      <circle cx="-200" cy="0" r="8" class="clock-led" />
+      <text x="-200" y="4" class="led-label">75</text>
+      <text x="-200" y="-15" class="info-text" text-anchor="middle">9 o'clock</text>
+
+      <!-- Additional context LEDs -->
+      <circle cx="141" cy="-141" r="6" class="clock-led" />
+      <text x="141" y="-138" class="led-label" font-size="8">12</text>
+
+      <circle cx="141" cy="141" r="6" class="clock-led" />
+      <text x="141" y="144" class="led-label" font-size="8">38</text>
+
+      <circle cx="-141" cy="141" r="6" class="clock-led" />
+      <text x="-141" y="144" class="led-label" font-size="8">63</text>
+
+      <circle cx="-141" cy="-141" r="6" class="clock-led" />
+      <text x="-141" y="-138" class="led-label" font-size="8">88</text>
+
+      <!-- Label -->
+      <text x="0" y="0" class="ring-label">CLOCK</text>
+      <text x="0" y="18" class="info-text" text-anchor="middle">Logical 0-100</text>
+    </g>
+
+    <!-- Eye Rings (Logical) -->
+    <g id="eye-logical" transform="translate(1050, 280)">
+      <!-- EYE_4 (Outermost) -->
+      <circle cx="0" cy="0" r="155" fill="none" stroke="#2196F3" stroke-width="2"
+        stroke-dasharray="5,5" />
+      <!-- Key positions -->
+      <circle cx="0" cy="-155" r="7" class="eye4-led" />
+      <text x="0" y="-151" class="led-label">0</text>
+
+      <circle cx="155" cy="0" r="7" class="eye4-led" />
+      <text x="155" y="4" class="led-label">6</text>
+
+      <circle cx="0" cy="155" r="7" class="eye4-led" />
+      <text x="0" y="159" class="led-label">12</text>
+
+      <circle cx="-155" cy="0" r="7" class="eye4-led" />
+      <text x="-155" y="4" class="led-label">18</text>
+
+      <circle cx="110" cy="-110" r="6" class="eye4-led" />
+      <text x="110" y="-107" class="led-label" font-size="8">3</text>
+
+      <text x="0" y="-170" class="info-text" text-anchor="middle">EYE_4: Logical 0-23</text>
+
+      <!-- EYE_3 -->
+      <circle cx="0" cy="0" r="120" fill="none" stroke="#03A9F4" stroke-width="2"
+        stroke-dasharray="5,5" />
+      <circle cx="0" cy="-120" r="6" class="eye3-led" />
+      <text x="0" y="-117" class="led-label" font-size="9">0</text>
+
+      <circle cx="120" cy="0" r="6" class="eye3-led" />
+      <text x="120" y="3" class="led-label" font-size="9">4</text>
+
+      <circle cx="0" cy="120" r="6" class="eye3-led" />
+      <text x="0" y="123" class="led-label" font-size="9">8</text>
+
+      <circle cx="-120" cy="0" r="6" class="eye3-led" />
+      <text x="-120" y="3" class="led-label" font-size="9">12</text>
+
+      <text x="0" y="-135" class="info-text" text-anchor="middle">EYE_3: Logical 0-15</text>
+
+      <!-- EYE_2 -->
+      <circle cx="0" cy="0" r="85" fill="none" stroke="#00BCD4" stroke-width="2"
+        stroke-dasharray="5,5" />
+      <circle cx="0" cy="-85" r="5" class="eye2-led" />
+      <text x="0" y="-82" class="led-label" font-size="8">0</text>
+
+      <circle cx="85" cy="0" r="5" class="eye2-led" />
+      <text x="85" y="3" class="led-label" font-size="8">3</text>
+
+      <circle cx="0" cy="85" r="5" class="eye2-led" />
+      <text x="0" y="88" class="led-label" font-size="8">6</text>
+
+      <circle cx="-85" cy="0" r="5" class="eye2-led" />
+      <text x="-85" y="3" class="led-label" font-size="8">9</text>
+
+      <text x="0" y="-100" class="info-text" text-anchor="middle">EYE_2: Logical 0-11</text>
+
+      <!-- EYE_1 -->
+      <circle cx="0" cy="0" r="50" fill="none" stroke="#00E5FF" stroke-width="2"
+        stroke-dasharray="5,5" />
+      <circle cx="0" cy="-50" r="4" class="eye1-led" />
+      <text x="0" y="-48" class="led-label" font-size="7">0</text>
+
+      <circle cx="50" cy="0" r="4" class="eye1-led" />
+      <text x="50" y="2" class="led-label" font-size="7">2</text>
+
+      <circle cx="0" cy="50" r="4" class="eye1-led" />
+      <text x="0" y="52" class="led-label" font-size="7">4</text>
+
+      <circle cx="-50" cy="0" r="4" class="eye1-led" />
+      <text x="-50" y="2" class="led-label" font-size="7">6</text>
+
+      <text x="0" y="-65" class="info-text" text-anchor="middle">EYE_1: Logical 0-7</text>
+
+      <!-- EYE_0 (Center) -->
+      <circle cx="0" cy="0" r="10" class="eye0-led" />
+      <text x="0" y="4" class="led-label">0</text>
+      <text x="0" y="30" class="info-text" text-anchor="middle">EYE_0: Index 0</text>
+
+      <!-- Direction indicator -->
+      <text x="0" y="250" class="info-text" text-anchor="middle" font-style="italic">All rings start
+        at 12 o'clock (0)</text>
+    </g>
+
+    <!-- Info box -->
+    <rect x="750" y="600" width="600" height="180" class="legend-box" />
+    <text x="770" y="625" class="subtitle">Logical Index Information:</text>
+    <text x="770" y="650" class="info-text">• All segments use index 0 = 12 o'clock (top)</text>
+    <text x="770" y="670" class="info-text">• Clock: Logical 0-100</text>
+    <text x="770" y="690" class="info-text"> - Index 0 = 12 o'clock, 25 = 3 o'clock</text>
+    <text x="770" y="710" class="info-text"> - Index 50 = 6 o'clock, 75 = 9 o'clock</text>
+    <text x="770" y="735" class="info-text">• Eye Rings: Each ring starts at logical 0</text>
+    <text x="770" y="755" class="info-text"> - EYE_4[0] = 12 o'clock, EYE_4[6] = 3 o'clock</text>
+    <text x="770" y="775" class="info-text"> - Mapping arrays convert logical → raw automatically</text>
+  </g>
+
+  <!-- Legend -->
+  <g id="legend" transform="translate(50, 30)">
+    <rect x="0" y="0" width="200" height="180" class="legend-box" />
+    <text x="10" y="20" class="subtitle">Color Legend:</text>
+
+    <circle cx="20" cy="40" r="6" class="clock-led" />
+    <text x="35" y="45" class="info-text">Clock Ring</text>
+
+    <circle cx="20" cy="60" r="6" class="eye4-led" />
+    <text x="35" y="65" class="info-text">EYE_4 (Outer)</text>
+
+    <circle cx="20" cy="80" r="6" class="eye3-led" />
+    <text x="35" y="85" class="info-text">EYE_3</text>
+
+    <circle cx="20" cy="100" r="6" class="eye2-led" />
+    <text x="35" y="105" class="info-text">EYE_2</text>
+
+    <circle cx="20" cy="120" r="6" class="eye1-led" />
+    <text x="35" y="125" class="info-text">EYE_1</text>
+
+    <circle cx="20" cy="140" r="6" class="eye0-led" />
+    <text x="35" y="145" class="info-text">EYE_0 (Center)</text>
+
+    <line x1="10" y1="160" x2="40" y2="160" class="direction-arrow" />
+    <text x="45" y="165" class="info-text">Data Flow</text>
+  </g>
+</svg>

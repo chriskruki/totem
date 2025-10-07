@@ -1,11 +1,24 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
-// LED Configuration
-#define NUM_LEDS 162     // Total LED count (61 Eye + 101 Clock)
+#include <stdint.h>
+
+// ============================================================================
+// LED CONFIGURATION & INDEXING SYSTEM
+// ============================================================================
+// Physical wiring: CLOCK (0-100) -> EYE rings (101-161)
+// All code uses LOGICAL indices where 0 = 12 o'clock position
+// Helper arrays (CLOCK_LED_MAP, EYE_X_LED_MAP) convert logical->raw indices
+
+// Total LED counts
+#define CLOCK_TOTAL_LEDS 101 // Clock ring LED count
+#define EYE_TOTAL_LEDS 61    // Total LEDs in all eye rings
+#define NUM_LEDS 162         // Total LED count (101 Clock + 61 Eye)
+
+// Hardware configuration
 #define DATA_PIN 13      // GPIO pin connected to LED data line
-#define LED_TYPE WS2812B // Change if using different LED type (APA102, WS2811, etc.)
-#define COLOR_ORDER GRB  // Color order for your LED strip
+#define LED_TYPE WS2812B // LED type
+#define COLOR_ORDER GRB  // Color order for LED strip
 
 // Pole LED Configuration
 #define POLE_NUM_LEDS 300 // Total LEDs in pole spiral strip
@@ -24,86 +37,105 @@
 #define JOYSTICK_Y_PIN 35     // GPIO35 (ADC1_CH7) for Y-axis
 #define JOYSTICK_BUTTON_PIN 4 // GPIO4 for joystick button
 
-// LED Segment Configuration
-// Data flow: EYE_4 (outer) -> EYE_3 -> EYE_2 -> EYE_1 -> EYE_0 (center) -> CLOCK
-#define EYE_TOTAL_LEDS 61    // Total LEDs in all eye rings
-#define CLOCK_TOTAL_LEDS 101 // Total LEDs in clock ring
+// ============================================================================
+// RAW LED INDICES (Physical Wiring Order)
+// ============================================================================
+// Clock: Raw indices 0-100, starts at 6 o'clock, goes counter-clockwise
+// Eye:   Raw indices 101-161, starts at 6 o'clock (EYE_4), goes clockwise
 
-// Eye Ring Definitions (LED indices)
-#define EYE_4_START 0  // Outermost eye ring startpio
-#define EYE_4_COUNT 24 // LEDs in ring 4
-#define EYE_4_END (EYE_4_START + EYE_4_COUNT - 1)
+// Clock Ring - Raw Indices (counter-clockwise from 6 o'clock)
+#define CLOCK_RAW_START 0
+#define CLOCK_RAW_END 100
+#define CLOCK_COUNT 101
 
-#define EYE_3_START (EYE_4_END + 1) // Ring 3 start
-#define EYE_3_COUNT 16              // LEDs in ring 3
-#define EYE_3_END (EYE_3_START + EYE_3_COUNT - 1)
+// Eye Ring Raw Indices (clockwise from 6 o'clock, outermost first)
+#define EYE_4_RAW_START 101 // Outermost ring
+#define EYE_4_COUNT 24
+#define EYE_4_RAW_END (EYE_4_RAW_START + EYE_4_COUNT - 1) // 124
 
-#define EYE_2_START (EYE_3_END + 1) // Ring 2 start
-#define EYE_2_COUNT 12              // LEDs in ring 2
-#define EYE_2_END (EYE_2_START + EYE_2_COUNT - 1)
+#define EYE_3_RAW_START (EYE_4_RAW_END + 1) // 125
+#define EYE_3_COUNT 16
+#define EYE_3_RAW_END (EYE_3_RAW_START + EYE_3_COUNT - 1) // 140
 
-#define EYE_1_START (EYE_2_END + 1) // Ring 1 start
-#define EYE_1_COUNT 8               // LEDs in ring 1
-#define EYE_1_END (EYE_1_START + EYE_1_COUNT - 1)
+#define EYE_2_RAW_START (EYE_3_RAW_END + 1) // 141
+#define EYE_2_COUNT 12
+#define EYE_2_RAW_END (EYE_2_RAW_START + EYE_2_COUNT - 1) // 152
 
-#define EYE_0_START (EYE_1_END + 1) // Center LED (ring 0)
-#define EYE_0_COUNT 1               // Single center LED
-#define EYE_0_END (EYE_0_START + EYE_0_COUNT - 1)
+#define EYE_1_RAW_START (EYE_2_RAW_END + 1) // 153
+#define EYE_1_COUNT 8
+#define EYE_1_RAW_END (EYE_1_RAW_START + EYE_1_COUNT - 1) // 160
 
-// Clock Ring Definition
-#define CLOCK_START (EYE_0_END + 1) // Clock ring start (LED 61)
-#define CLOCK_COUNT 101             // LEDs in clock ring
-#define CLOCK_END (CLOCK_START + CLOCK_COUNT - 1)
+#define EYE_0_RAW_START (EYE_1_RAW_END + 1) // 161 (center LED)
+#define EYE_0_COUNT 1
+#define EYE_0_RAW_END EYE_0_RAW_START // 161
 
-// Ring Count
-#define NUM_EYE_RINGS 5   // EYE_4, EYE_3, EYE_2, EYE_1, EYE_0
-#define NUM_TOTAL_RINGS 6 // All eye rings + clock ring
+// ============================================================================
+// LOGICAL LED MAPPING ARRAYS
+// ============================================================================
+// These arrays map logical indices (0 = 12 o'clock) to raw indices
+// Usage: leds[CLOCK_LED_MAP[logical_index]] = color;
+
+extern const uint16_t CLOCK_LED_MAP[CLOCK_COUNT];
+extern const uint16_t EYE_4_LED_MAP[EYE_4_COUNT];
+extern const uint16_t EYE_3_LED_MAP[EYE_3_COUNT];
+extern const uint16_t EYE_2_LED_MAP[EYE_2_COUNT];
+extern const uint16_t EYE_1_LED_MAP[EYE_1_COUNT];
+
+// Combined eye mapping array (all eye rings in one array, outer to inner)
+// EYE_4[0-23] -> EYE_3[24-39] -> EYE_2[40-51] -> EYE_1[52-59] -> EYE_0[60]
+extern const uint16_t EYE_TOTAL_LED_MAP[EYE_TOTAL_LEDS];
 
 // Segment Type Definitions
-#define SEGMENT_EYE_4 0
-#define SEGMENT_EYE_3 1
-#define SEGMENT_EYE_2 2
-#define SEGMENT_EYE_1 3
-#define SEGMENT_EYE_0 4
-#define SEGMENT_CLOCK 5
+#define SEGMENT_CLOCK 0
+#define SEGMENT_EYE_4 1
+#define SEGMENT_EYE_3 2
+#define SEGMENT_EYE_2 3
+#define SEGMENT_EYE_1 4
+#define SEGMENT_EYE_0 5
+
+#define NUM_EYE_RINGS 5   // EYE_4, EYE_3, EYE_2, EYE_1, EYE_0
+#define NUM_TOTAL_RINGS 6 // All eye rings + clock ring
 
 // Debug and Testing Options
 #define ENABLE_SEGMENT_DEBUG false // Enable segment debugging output
 #define SEGMENT_TEST_INTERVAL 2000 // Segment test cycle interval (ms)
 
-// Direction Reversal Options
-#define REVERSE_EYE_DIRECTION true // Reverse eye LED direction to match clock direction
-
 // Brightness and Speed Mode Settings
 #define BRIGHTNESS_LEVELS 9 // Number of brightness levels (1-10)
 #define SPEED_LEVELS 9      // Number of speed levels (1-10)
 
-// Brightness preview LEDs (vertical column in eye rings)
+// ============================================================================
+// BRIGHTNESS & SPEED PREVIEW LED POSITIONS (Pre-computed Raw Indices)
+// ============================================================================
+// These arrays store RAW LED indices by accessing the mapping arrays
+// This provides O(1) lookup without needing SegmentManager at runtime
+
+// Brightness preview: Vertical line from 6 o'clock (bottom, level 0) to 12 o'clock (top, level 8)
 #define BRIGHTNESS_PREVIEW_LEDS 9
 const uint16_t BRIGHTNESS_LED_POSITIONS[BRIGHTNESS_PREVIEW_LEDS] = {
-    0,  // EYE_4 top
-    24, // EYE_3 top
-    40, // EYE_2 top
-    52, // EYE_1 top
-    60, // EYE_0 center
-    56, // EYE_1 bottom
-    46, // EYE_2 bottom
-    32, // EYE_3 bottom
-    12, // EYE_4 bottom
+    EYE_4_LED_MAP[12], // Level 0: EYE_4 at 6 o'clock (bottom) - logical 11 (24/2 - 1)
+    EYE_3_LED_MAP[8],  // Level 1: EYE_3 at 6 o'clock - logical 7 (16/2 - 1)
+    EYE_2_LED_MAP[6],  // Level 2: EYE_2 at 6 o'clock - logical 5 (12/2 - 1)
+    EYE_1_LED_MAP[4],  // Level 3: EYE_1 at 6 o'clock - logical 3 (8/2 - 1)
+    EYE_0_RAW_START,   // Level 4: EYE_0 center (raw 161)
+    EYE_1_LED_MAP[0],  // Level 5: EYE_1 at 12 o'clock (top)
+    EYE_2_LED_MAP[0],  // Level 6: EYE_2 at 12 o'clock
+    EYE_3_LED_MAP[0],  // Level 7: EYE_3 at 12 o'clock
+    EYE_4_LED_MAP[0]   // Level 8: EYE_4 at 12 o'clock
 };
 
-// Speed preview LEDs (horizontal line in eye rings)
+// Speed preview: Horizontal line from 9 o'clock (left, level 0) through center to 3 o'clock (right, level 8)
 #define SPEED_PREVIEW_LEDS 9
 const uint16_t SPEED_LED_POSITIONS[SPEED_PREVIEW_LEDS] = {
-    6,  // EYE_4 left
-    28, // EYE_3 left
-    43, // EYE_2 left
-    54, // EYE_1 left
-    60, // EYE_0 center
-    58, // EYE_1 right
-    49, // EYE_2 right
-    36, // EYE_3 right
-    18  // EYE_4 right
+    EYE_4_LED_MAP[18], // Level 0: EYE_4 at 9 o'clock (left) - logical 17 (3*24/4 - 1)
+    EYE_3_LED_MAP[12], // Level 1: EYE_3 at 9 o'clock - logical 11 (3*16/4 - 1)
+    EYE_2_LED_MAP[9],  // Level 2: EYE_2 at 9 o'clock - logical 8 (3*12/4 - 1)
+    EYE_1_LED_MAP[6],  // Level 3: EYE_1 at 9 o'clock - logical 5 (3*8/4 - 1)
+    EYE_0_RAW_START,   // Level 4: EYE_0 center (raw 161)
+    EYE_1_LED_MAP[2],  // Level 5: EYE_1 at 3 o'clock (right) - logical 1 (8/4 - 1)
+    EYE_2_LED_MAP[3],  // Level 6: EYE_2 at 3 o'clock - logical 2 (12/4 - 1)
+    EYE_3_LED_MAP[4],  // Level 7: EYE_3 at 3 o'clock - logical 3 (16/4 - 1)
+    EYE_4_LED_MAP[6]   // Level 8: EYE_4 at 3 o'clock - logical 5 (24/4 - 1)
 };
 
 // Brightness settings (0-255)
@@ -220,8 +252,11 @@ extern uint8_t currentSubMode;
 #define POINTER_BG_COLOR_HTML CRGB::HTMLColorCode::Black
 #define POINTER_BG_BRIGHTNESS 30 // Brightness for background LEDs
 
+// Joystick Button Settings
+#define BUTTON_HOLD_DURATION 2000 // Duration to hold button for mode change (ms)
+#define BUTTON_HOLD_THRESHOLD 100 // Minimum hold time to distinguish from bounce (ms)
+
 // Calibration settings
-#define DOUBLE_CLICK_TIMEOUT 500   // Max time between clicks for double-click (ms)
 #define CALIBRATION_TIMEOUT 20000  // Auto-exit calibration after 10 seconds
 #define CALIBRATION_BLINK_RATE 200 // Blink rate during calibration (ms)
 #define MIN_JOYSTICK_RANGE 100     // Minimum acceptable range for calibration

@@ -85,10 +85,10 @@ private:
   bool calibrationBlinkState;
   int xMin, xMax, yMin, yMax; // Calibrated joystick bounds
 
-  // Double-click detection
-  int clickCount;
-  unsigned long lastClickTime;
-  unsigned long firstClickTime;
+  // Button hold detection
+  bool buttonHeldDown;
+  unsigned long buttonPressStartTime;
+  bool holdActionTriggered;
 
   // Joystick state
   struct JoystickState
@@ -140,7 +140,7 @@ private:
 
   // Mode switching methods
   void cycleSingleClick(); // Cycle sub-mode
-  void cycleDoubleClick(); // Cycle main mode
+  void cycleHoldAction();  // Cycle main mode (triggered by button hold)
   String getCurrentModeDescription() const;
   String getCurrentSubModeDescription() const;
 
@@ -197,7 +197,7 @@ private:
   // Calibration helper methods
   void startCalibrationMode();
   void exitCalibrationMode();
-  bool detectDoubleClick(bool buttonPressed, unsigned long currentTime);
+  bool detectButtonHold(bool buttonPressed, unsigned long currentTime);
   void saveCalibration();
   void loadCalibration();
 

@@ -1354,7 +1354,7 @@ void FireworkAction::updateLaunchPhase(unsigned long currentTime)
   else
   {
     // Fallback: simulate on clock ring
-    int clockStart = CLOCK_START;
+    int clockStart = CLOCK_RAW_START;
     int clockCount = CLOCK_COUNT;
 
     // Map launch position to clock LEDs (bottom to top simulation)
@@ -1424,28 +1424,28 @@ void FireworkAction::updateExplosionPhase(unsigned long currentTime)
         {
           // Eye rings (EYE_0 to EYE_4) - center to outer
           int segmentType = SEGMENT_EYE_0 - ring; // Subtract to go from center (4) outward to (0)
-          int startLED, count;
+          int rawStartLED, count;
 
           switch (segmentType)
           {
           case SEGMENT_EYE_0: // ring 0 - center
-            startLED = EYE_0_START;
+            rawStartLED = EYE_0_RAW_START;
             count = EYE_0_COUNT;
             break;
           case SEGMENT_EYE_1: // ring 1
-            startLED = EYE_1_START;
+            rawStartLED = EYE_1_RAW_START;
             count = EYE_1_COUNT;
             break;
           case SEGMENT_EYE_2: // ring 2
-            startLED = EYE_2_START;
+            rawStartLED = EYE_2_RAW_START;
             count = EYE_2_COUNT;
             break;
           case SEGMENT_EYE_3: // ring 3
-            startLED = EYE_3_START;
+            rawStartLED = EYE_3_RAW_START;
             count = EYE_3_COUNT;
             break;
           case SEGMENT_EYE_4: // ring 4 - outermost
-            startLED = EYE_4_START;
+            rawStartLED = EYE_4_RAW_START;
             count = EYE_4_COUNT;
             break;
           default:
@@ -1454,7 +1454,7 @@ void FireworkAction::updateExplosionPhase(unsigned long currentTime)
 
           for (int i = 0; i < count; i++)
           {
-            int ledIndex = startLED + i;
+            int ledIndex = rawStartLED + i;
             if (ledIndex < numLeds)
             {
               leds[ledIndex] = rgbColor;
@@ -1466,7 +1466,7 @@ void FireworkAction::updateExplosionPhase(unsigned long currentTime)
           // Clock ring
           for (int i = 0; i < CLOCK_COUNT; i++)
           {
-            int ledIndex = CLOCK_START + i;
+            int ledIndex = CLOCK_RAW_START + i;
             if (ledIndex < numLeds)
             {
               leds[ledIndex] = rgbColor;
@@ -1510,28 +1510,28 @@ void FireworkAction::updateFadeoutPhase(unsigned long currentTime)
       {
         // Eye rings (EYE_0 to EYE_4) - center to outer
         int segmentType = SEGMENT_EYE_0 - ring;
-        int startLED, count;
+        int rawStartLED, count;
 
         switch (segmentType)
         {
         case SEGMENT_EYE_0:
-          startLED = EYE_0_START;
+          rawStartLED = EYE_0_RAW_START;
           count = EYE_0_COUNT;
           break;
         case SEGMENT_EYE_1:
-          startLED = EYE_1_START;
+          rawStartLED = EYE_1_RAW_START;
           count = EYE_1_COUNT;
           break;
         case SEGMENT_EYE_2:
-          startLED = EYE_2_START;
+          rawStartLED = EYE_2_RAW_START;
           count = EYE_2_COUNT;
           break;
         case SEGMENT_EYE_3:
-          startLED = EYE_3_START;
+          rawStartLED = EYE_3_RAW_START;
           count = EYE_3_COUNT;
           break;
         case SEGMENT_EYE_4:
-          startLED = EYE_4_START;
+          rawStartLED = EYE_4_RAW_START;
           count = EYE_4_COUNT;
           break;
         default:
@@ -1540,7 +1540,7 @@ void FireworkAction::updateFadeoutPhase(unsigned long currentTime)
 
         for (int i = 0; i < count; i++)
         {
-          int ledIndex = startLED + i;
+          int ledIndex = rawStartLED + i;
           if (ledIndex < numLeds)
           {
             leds[ledIndex] = rgbColor;
@@ -1552,7 +1552,7 @@ void FireworkAction::updateFadeoutPhase(unsigned long currentTime)
         // Clock ring
         for (int i = 0; i < CLOCK_COUNT; i++)
         {
-          int ledIndex = CLOCK_START + i;
+          int ledIndex = CLOCK_RAW_START + i;
           if (ledIndex < numLeds)
           {
             leds[ledIndex] = rgbColor;

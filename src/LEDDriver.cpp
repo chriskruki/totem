@@ -42,9 +42,9 @@ LEDDriver::LEDDriver() : brightness(DEFAULT_BRIGHTNESS),
                          xMax(JOYSTICK_MAX),
                          yMin(JOYSTICK_MIN),
                          yMax(JOYSTICK_MAX),
-                         clickCount(0),
-                         lastClickTime(0),
-                         firstClickTime(0),
+                         buttonHeldDown(false),
+                         buttonPressStartTime(0),
+                         holdActionTriggered(false),
                          eyeRenderer(nullptr),
                          activeFireworkCount(0),
                          inFireworkMode(false),
@@ -245,6 +245,8 @@ void LEDDriver::readJoystick()
 
   // Handle button press with debouncing
   unsigned long currentTime = millis();
+
+  // Update button state only when it changes (with debouncing)
   if (buttonState != joystickState.lastButtonState)
   {
     if (currentTime - joystickState.lastButtonChange > BUTTON_DEBOUNCE_MS)
@@ -252,44 +254,53 @@ void LEDDriver::readJoystick()
       joystickState.buttonPressed = buttonState;
       joystickState.lastButtonState = buttonState;
       joystickState.lastButtonChange = currentTime;
-
-      // Check for double-click to cycle main mode
-      if (buttonState && detectDoubleClick(buttonState, currentTime))
-      {
-        // Check if we're in firework mode - double click exits AND cycles mode
-        if (inFireworkMode)
-        {
-          exitFireworkMode();
-          // Continue to process normal mode switching to leave firework sub-mode
-        }
-
-        // Normal double-click: cycle main mode
-        cycleDoubleClick();
-      }
-      // Single-click: cycle sub-mode
-      else if (buttonState && !inCalibrationMode)
-      {
-        // If in settings mode, single click returns to previous mode
-        if (currentMode == SPECIAL_MODE_SETTINGS)
-        {
-          currentMode = currentMainMode; // Return to main mode
-          Serial.print("Exited Settings Mode, returned to: ");
-          Serial.println(getCurrentModeDescription());
-        }
-        else
-        {
-          // Check if we're in firework mode - single click exits AND cycles mode
-          if (inFireworkMode)
-          {
-            exitFireworkMode();
-            // Continue to process normal mode switching to leave firework sub-mode
-          }
-
-          // Normal single-click: cycle sub-mode
-          cycleSingleClick();
-        }
-      }
     }
+  }
+
+  // Check for button hold continuously (even when state hasn't changed)
+  if (detectButtonHold(buttonState, currentTime))
+  {
+    // Check if we're in firework mode - hold exits AND cycles mode
+    if (inFireworkMode)
+    {
+      exitFireworkMode();
+      // Continue to process normal mode switching to leave firework sub-mode
+    }
+
+    // Button hold: cycle main mode
+    cycleHoldAction();
+  }
+
+  // Single-click: cycle sub-mode (button released after short press)
+  // Detect on button release when hold wasn't triggered
+  static bool wasPressed = false;
+  if (joystickState.buttonPressed)
+  {
+    wasPressed = true;
+  }
+  else if (wasPressed && !holdActionTriggered && !inCalibrationMode)
+  {
+    // If in settings mode, single click returns to previous mode
+    if (currentMode == SPECIAL_MODE_SETTINGS)
+    {
+      currentMode = currentMainMode; // Return to main mode
+      Serial.print("Exited Settings Mode, returned to: ");
+      Serial.println(getCurrentModeDescription());
+    }
+    else
+    {
+      // Check if we're in firework mode - single click exits AND cycles mode
+      if (inFireworkMode)
+      {
+        exitFireworkMode();
+        // Continue to process normal mode switching to leave firework sub-mode
+      }
+
+      // Normal single-click: cycle sub-mode
+      cycleSingleClick();
+    }
+
+    wasPressed = false; // Reset for next cycle
   }
 
   // Process the joystick input based on current mode
@@ -578,54 +589,50 @@ void LEDDriver::getCurrentColor(uint8_t &r, uint8_t &g, uint8_t &b) const
   b = currentB;
 }
 
-bool LEDDriver::detectDoubleClick(bool buttonPressed, unsigned long currentTime)
+bool LEDDriver::detectButtonHold(bool buttonPressed, unsigned long currentTime)
 {
-  // Only count button presses (not releases)
-  if (!buttonPressed)
+  // Button just pressed - start tracking
+  if (buttonPressed && !buttonHeldDown)
   {
+    buttonHeldDown = true;
+    buttonPressStartTime = currentTime;
+    holdActionTriggered = false;
+    Serial.println("Button pressed - hold timer started");
     return false;
   }
 
-  // Reset if too much time has passed since first click
-  if (clickCount > 0 && (currentTime - firstClickTime) > DOUBLE_CLICK_TIMEOUT)
+  // Button is being held down
+  if (buttonPressed && buttonHeldDown && !holdActionTriggered)
   {
-    clickCount = 0;
-  }
+    unsigned long holdDuration = currentTime - buttonPressStartTime;
 
-  // First click
-  if (clickCount == 0)
-  {
-    clickCount = 1;
-    firstClickTime = currentTime;
-    lastClickTime = currentTime;
-    Serial.println("Click 1/2");
-    return false;
-  }
-
-  // Second click - check timing
-  if ((currentTime - lastClickTime) < DOUBLE_CLICK_TIMEOUT)
-  {
-    clickCount++;
-    lastClickTime = currentTime;
-
-    Serial.print("Click ");
-    Serial.print(clickCount);
-    Serial.println("/2");
-
-    if (clickCount >= 2)
+    // Check if hold duration threshold reached
+    if (holdDuration >= BUTTON_HOLD_DURATION)
     {
-      clickCount = 0; // Reset for next time
-      Serial.println("DOUBLE CLICK DETECTED!");
+      holdActionTriggered = true;
+      Serial.print("BUTTON HOLD DETECTED! (");
+      Serial.print(holdDuration);
+      Serial.println("ms)");
       return true;
     }
   }
-  else
+
+  // Button released
+  if (!buttonPressed && buttonHeldDown)
   {
-    // Too slow, reset
-    clickCount = 1;
-    firstClickTime = currentTime;
-    lastClickTime = currentTime;
-    Serial.println("Click 1/2 (reset)");
+    unsigned long holdDuration = currentTime - buttonPressStartTime;
+
+    // Reset hold tracking
+    buttonHeldDown = false;
+    holdActionTriggered = false;
+
+    // If released after threshold but before action triggered, treat as single click
+    if (holdDuration >= BUTTON_HOLD_THRESHOLD && holdDuration < BUTTON_HOLD_DURATION)
+    {
+      Serial.print("Button released (");
+      Serial.print(holdDuration);
+      Serial.println("ms) - treated as single click");
+    }
   }
 
   return false;
@@ -1878,16 +1885,18 @@ SegmentManager &LEDDriver::getSegmentManager()
 void LEDDriver::renderBrightnessPreview(uint8_t level)
 {
   // Render brightness level on vertical column LEDs in eye rings
-  // Level 1 = only bottom LED (12), Level 10 = all LEDs lit
+  // Level 1 = only bottom LED (6 o'clock), Level 9 = all LEDs to top (12 o'clock)
 
   CRGB previewColor = CRGB::White;
 
   for (uint8_t i = 0; i < min((int)level, BRIGHTNESS_PREVIEW_LEDS); i++)
   {
-    uint16_t ledIndex = BRIGHTNESS_LED_POSITIONS[i];
-    if (ledIndex < NUM_LEDS)
+    // Access pre-computed raw LED index directly from mapping array
+    uint16_t rawIndex = BRIGHTNESS_LED_POSITIONS[i];
+
+    if (rawIndex < NUM_LEDS)
     {
-      leds[ledIndex] = previewColor;
+      leds[rawIndex] = previewColor;
     }
   }
 }
@@ -1895,16 +1904,18 @@ void LEDDriver::renderBrightnessPreview(uint8_t level)
 void LEDDriver::renderSpeedPreview(uint8_t level)
 {
   // Render speed level on horizontal line LEDs in eye rings
-  // Level 1 = only left LED (6), Level 10 = all LEDs lit
+  // Level 1 = only left LED (9 o'clock), Level 9 = all LEDs to right (3 o'clock)
 
   CRGB previewColor = CRGB::Blue;
 
   for (uint8_t i = 0; i < min((int)level, SPEED_PREVIEW_LEDS); i++)
   {
-    uint16_t ledIndex = SPEED_LED_POSITIONS[i];
-    if (ledIndex < NUM_LEDS)
+    // Access pre-computed raw LED index directly from mapping array
+    uint16_t rawIndex = SPEED_LED_POSITIONS[i];
+
+    if (rawIndex < NUM_LEDS)
     {
-      leds[ledIndex] = previewColor;
+      leds[rawIndex] = previewColor;
     }
   }
 }
@@ -1913,7 +1924,7 @@ void LEDDriver::renderCombinedPreview(uint8_t brightnessLevel, uint8_t speedLeve
 {
   // Render both brightness (vertical) and speed (horizontal) previews simultaneously
   // Brightness uses white LEDs, speed uses blue LEDs
-  // Center LED (60) will be mixed if both are active
+  // Center LED (EYE_0) will be mixed if both are active
 
   CRGB brightnessColor = CRGB::White;
   CRGB speedColor = CRGB::Blue;
@@ -1922,28 +1933,32 @@ void LEDDriver::renderCombinedPreview(uint8_t brightnessLevel, uint8_t speedLeve
   // Render brightness preview (vertical)
   for (uint8_t i = 0; i < min((int)brightnessLevel, BRIGHTNESS_PREVIEW_LEDS); i++)
   {
-    uint16_t ledIndex = BRIGHTNESS_LED_POSITIONS[i];
-    if (ledIndex < NUM_LEDS)
+    // Access pre-computed raw LED index directly from mapping array
+    uint16_t rawIndex = BRIGHTNESS_LED_POSITIONS[i];
+
+    if (rawIndex < NUM_LEDS)
     {
-      leds[ledIndex] = brightnessColor;
+      leds[rawIndex] = brightnessColor;
     }
   }
 
   // Render speed preview (horizontal)
   for (uint8_t i = 0; i < min((int)speedLevel, SPEED_PREVIEW_LEDS); i++)
   {
-    uint16_t ledIndex = SPEED_LED_POSITIONS[i];
-    if (ledIndex < NUM_LEDS)
+    // Access pre-computed raw LED index directly from mapping array
+    uint16_t rawIndex = SPEED_LED_POSITIONS[i];
+
+    if (rawIndex < NUM_LEDS)
     {
       // Check if this LED is already lit by brightness preview
-      if (leds[ledIndex] == brightnessColor)
+      if (leds[rawIndex] == brightnessColor)
       {
         // Mix colors for overlap (center LED and any other overlaps)
-        leds[ledIndex] = mixedColor;
+        leds[rawIndex] = mixedColor;
       }
       else
       {
-        leds[ledIndex] = speedColor;
+        leds[rawIndex] = speedColor;
       }
     }
   }
@@ -1983,7 +1998,7 @@ void LEDDriver::renderWaveEffectOnClock()
       CRGB rgbColor;
       hsv2rgb_rainbow(hsvColor, rgbColor);
 
-      uint16_t absoluteIndex = clockSegment->startIndex + i;
+      uint16_t absoluteIndex = clockSegment->rawStartIndex + i;
       if (absoluteIndex < NUM_LEDS)
       {
         leds[absoluteIndex] = rgbColor;
@@ -2285,7 +2300,7 @@ void LEDDriver::cycleSingleClick()
   }
 }
 
-void LEDDriver::cycleDoubleClick()
+void LEDDriver::cycleHoldAction()
 {
   // If leaving pole pattern explorer, return to auto mode
   if (currentMainMode == MAIN_MODE_EXPLORER && currentSubMode == EXPLORER_SUBMODE_POLE_PATTERN)
@@ -2299,11 +2314,11 @@ void LEDDriver::cycleDoubleClick()
     exitFireworkMode();
   }
 
-  // Double click cycles main modes
+  // Button hold cycles main modes
   currentMainMode = (currentMainMode + 1) % NUM_MAIN_MODES;
   currentSubMode = 0; // Reset to first sub-mode of new main mode
 
-  Serial.print("Double Click - Cycled to Main Mode: ");
+  Serial.print("Button Hold - Cycled to Main Mode: ");
   Serial.print(getCurrentModeDescription());
   Serial.print(" - Sub-Mode: ");
   Serial.println(getCurrentSubModeDescription());
@@ -2680,9 +2695,9 @@ void LEDDriver::renderJoltEffect(uint8_t magnitude)
   {
     // Deadzone: Light up center eye and middle row of pole
     // Center eye (EYE_0)
-    if (EYE_0_START < NUM_LEDS)
+    if (EYE_0_RAW_START < NUM_LEDS)
     {
-      leds[EYE_0_START] = CRGB::White;
+      leds[EYE_0_RAW_START] = CRGB::White;
     }
 
     // Middle row of pole (approximate center)
@@ -2802,31 +2817,31 @@ void LEDDriver::renderJoltEyeClock(uint8_t magnitude)
       }
 
       // Light up the appropriate ring
-      int startLED, count;
+      int rawStartLED, count;
       switch (ring)
       {
       case 0:
-        startLED = EYE_0_START;
+        rawStartLED = EYE_0_RAW_START;
         count = EYE_0_COUNT;
         break;
       case 1:
-        startLED = EYE_1_START;
+        rawStartLED = EYE_1_RAW_START;
         count = EYE_1_COUNT;
         break;
       case 2:
-        startLED = EYE_2_START;
+        rawStartLED = EYE_2_RAW_START;
         count = EYE_2_COUNT;
         break;
       case 3:
-        startLED = EYE_3_START;
+        rawStartLED = EYE_3_RAW_START;
         count = EYE_3_COUNT;
         break;
       case 4:
-        startLED = EYE_4_START;
+        rawStartLED = EYE_4_RAW_START;
         count = EYE_4_COUNT;
         break;
       case 5:
-        startLED = CLOCK_START;
+        rawStartLED = CLOCK_RAW_START;
         count = CLOCK_COUNT;
         break;
       default:
@@ -2841,7 +2856,7 @@ void LEDDriver::renderJoltEyeClock(uint8_t magnitude)
       // Fill the ring with rainbow color
       for (int i = 0; i < ledsToLight; i++)
       {
-        int ledIndex = startLED + i;
+        int ledIndex = rawStartLED + i;
         if (ledIndex < NUM_LEDS)
         {
           leds[ledIndex] = color;

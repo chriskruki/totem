@@ -317,7 +317,7 @@ void SystemManager::printHelp()
   Serial.println("");
   Serial.println("=== Calibration ===");
   Serial.println("Method 1: Type 'calibrate' command");
-  Serial.println("Method 2: Double-click joystick button");
+  Serial.println("Method 2: Hold joystick button for 2 seconds");
   Serial.println("Move joystick to all extremes, then press button to save");
   Serial.println("");
   Serial.println("=== WiFi Web Interface ===");
