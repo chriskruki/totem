@@ -105,6 +105,34 @@ private:
     unsigned long lastRead;
   } joystickState;
 
+  // Joystick direction detection
+  enum JoystickDirection
+  {
+    DIR_NONE,
+    DIR_UP,
+    DIR_DOWN,
+    DIR_LEFT,
+    DIR_RIGHT
+  };
+
+  enum JoystickIntensity
+  {
+    INTENSITY_NONE, // In deadzone
+    INTENSITY_SOFT, // Between deadzone and hard threshold
+    INTENSITY_HARD  // Within 50 units of edge
+  };
+
+  struct JoystickDirectionInfo
+  {
+    JoystickDirection direction;
+    JoystickIntensity intensity;
+    int magnitude;         // Distance from center in the direction
+    float normalizedValue; // 0.0 to 1.0 (from deadzone to edge)
+  };
+
+  // Helper method to analyze joystick position
+  JoystickDirectionInfo getJoystickDirection();
+
   // Segment manager for multi-ring operations
   SegmentManager segmentManager;
 
@@ -157,9 +185,14 @@ private:
 
   // Jolt mode helper methods
   uint8_t calculateJoltMagnitude(int joystickY);
-  void renderJoltEffect(uint8_t magnitude);
-  void renderJoltPole(uint8_t magnitude);
-  void renderJoltEyeClock(uint8_t magnitude);
+  uint8_t calculateJoltMagnitudeDown(int joystickY);
+  void renderJoltEffectDeadzone();
+  void renderJoltEffectOutward(uint8_t magnitude);
+  void renderJoltEffectInward(uint8_t magnitude);
+  void renderJoltPoleOutward(uint8_t magnitude);
+  void renderJoltPoleInward(uint8_t magnitude);
+  void renderJoltEyeClockOutward(uint8_t magnitude);
+  void renderJoltEyeClockInward(uint8_t magnitude);
 
   // Pole pattern control methods
   void setPolePatternIndex(int patternIndex);

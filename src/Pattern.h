@@ -647,19 +647,23 @@ public:
 class PoleHelixPattern : public PolePattern
 {
 private:
-  uint16_t helixPhase;    // Current helix phase (fixed-point: 0-65535 = 0-2π)
-  uint8_t numHelixes;     // Number of parallel helixes (4 columns)
-  uint16_t helixSpeed;    // Speed of helix rotation (fixed-point)
-  float verticalPosition; // Vertical position (0.0 = bottom, 1.0 = top)
-  float verticalSpeed;    // Speed of vertical movement
-  bool movingUp;          // Direction of movement
-  uint8_t helixHeight;    // Height of helix block (3 rows)
+  static const uint8_t NUM_HELIXES = 3;
+  static const uint8_t HELIX_SIZE = 9; // 3 layers × 3 LEDs each
+
+  struct Helix
+  {
+    float verticalPosition; // Vertical position (0.0 = bottom, 1.0 = top)
+    float verticalSpeed;    // Speed of vertical movement
+    bool movingUp;          // Direction of movement
+  };
+
+  Helix helixes[NUM_HELIXES];
 
 public:
   PoleHelixPattern(CRGB *leds, int numLeds, CRGB *poleLeds, int poleNumLeds);
   bool update(unsigned long currentTime) override;
   String getName() const override { return "PoleHelix"; }
-  String getDescription() const override { return "Bouncing helix block (3 rows x 4 columns)"; }
+  String getDescription() const override { return "Three bouncing helixes (3 rows tall each)"; }
 };
 
 /**

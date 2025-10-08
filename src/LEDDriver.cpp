@@ -322,6 +322,116 @@ void LEDDriver::readJoystick()
   processJoystickInput();
 }
 
+/**
+ * @brief Analyzes joystick position and returns direction and intensity information
+ *
+ * This method provides a unified way to detect joystick movement with support for:
+ * - Primary direction detection (UP, DOWN, LEFT, RIGHT, or NONE)
+ * - Intensity detection (SOFT push vs HARD push)
+ * - Magnitude and normalized values for granular control
+ *
+ * Example usage:
+ *
+ *
+ *    JoystickDirectionInfo dir = getJoystickDirection();
+ *
+ *   // Check for soft left push
+ *   if (dir.direction == DIR_LEFT && dir.intensity == INTENSITY_SOFT) {
+ *     // Handle soft left action
+ *   }
+ *
+ *   // Check for hard right push
+ *   if (dir.direction == DIR_RIGHT && dir.intensity == INTENSITY_HARD) {
+ *     // Handle hard right action (e.g., skip multiple items)
+ *   }
+ *
+ *   // Use normalized value for smooth transitions
+ *   if (dir.direction == DIR_UP) {
+ *     float value = dir.normalizedValue; // 0.0 to 1.0
+ *     // Map to speed, brightness, etc.
+ *   }
+ *
+ * @return JoystickDirectionInfo structure containing direction, intensity, magnitude, and normalized value
+ */
+LEDDriver::JoystickDirectionInfo LEDDriver::getJoystickDirection()
+{
+  JoystickDirectionInfo info;
+  info.direction = DIR_NONE;
+  info.intensity = INTENSITY_NONE;
+  info.magnitude = 0;
+  info.normalizedValue = 0.0f;
+
+  // Calculate deltas from center
+  int deltaX = joystickState.x - JOYSTICK_CENTER;
+  int deltaY = joystickState.y - JOYSTICK_CENTER;
+
+  // Determine primary direction based on which axis has greater magnitude
+  int absDeltaX = abs(deltaX);
+  int absDeltaY = abs(deltaY);
+
+  // Check if we're in deadzone
+  if (absDeltaX < JOYSTICK_DEADZONE && absDeltaY < JOYSTICK_DEADZONE)
+  {
+    return info; // Return with DIR_NONE and INTENSITY_NONE
+  }
+
+  // Determine primary direction
+  if (absDeltaX > absDeltaY)
+  {
+    // Horizontal movement is dominant
+    if (deltaX > 0)
+    {
+      info.direction = DIR_RIGHT;
+      info.magnitude = deltaX;
+    }
+    else
+    {
+      info.direction = DIR_LEFT;
+      info.magnitude = absDeltaX;
+    }
+  }
+  else
+  {
+    // Vertical movement is dominant
+    if (deltaY > 0)
+    {
+      info.direction = DIR_UP;
+      info.magnitude = deltaY;
+    }
+    else
+    {
+      info.direction = DIR_DOWN;
+      info.magnitude = absDeltaY;
+    }
+  }
+
+  // Calculate normalized value (0.0 to 1.0 from deadzone to edge)
+  int maxRange = JOYSTICK_MAX - JOYSTICK_CENTER;     // Distance from center to edge
+  int effectiveRange = maxRange - JOYSTICK_DEADZONE; // Range excluding deadzone
+  int magnitudeFromDeadzone = info.magnitude - JOYSTICK_DEADZONE;
+
+  if (magnitudeFromDeadzone > 0)
+  {
+    info.normalizedValue = constrain((float)magnitudeFromDeadzone / (float)effectiveRange, 0.0f, 1.0f);
+  }
+
+  // Determine intensity (soft vs hard push)
+  // Hard push: within JOYSTICK_HARD_PUSH_MARGIN of the edge
+  int maxDistance = JOYSTICK_MAX - JOYSTICK_CENTER; // Maximum possible distance from center
+  int distanceFromEdge = maxDistance - info.magnitude;
+
+  if (distanceFromEdge <= JOYSTICK_HARD_PUSH_MARGIN)
+  {
+    info.intensity = INTENSITY_HARD;
+  }
+  else if (info.magnitude > JOYSTICK_DEADZONE)
+  {
+    info.intensity = INTENSITY_SOFT;
+  }
+
+  return info;
+}
+
 void LEDDriver::processJoystickInput()
 {
   // Handle special modes first
@@ -2572,23 +2682,46 @@ void LEDDriver::processPoleSettings()
 void LEDDriver::processEyeballMode()
 {
   // Eye Mode: Always show eyeball + red directional line on clock
-  // - Pole pattern continues playing
+  // - Top 7 LEDs of pole show global pattern
+  // - Drips fall along diagonal "stick" paths (e.g., LED 0->7->13->20...)
   // - Clock shows red line pointing in joystick direction
-  // - Line width based on joystick magnitude
-  // - Eye always rendered (center iris in deadzone)
+  // - Eye always rendered
 
   unsigned long currentTime = millis();
 
-  // Update pole pattern (continues playing)
-  updatePole();
+  // Drip system configuration
+  static const uint8_t MAX_DRIPS = 40;   // Increased from 20 to 40 for more consistent dripping
+  static const uint8_t DRIP_HEIGHT = 3;  // 3 rows tall
+  static const uint8_t POLE_HEIGHT = 23; // Total pole height in rows (300 LEDs / 13 columns = ~23 rows)
+  static const uint8_t POLE_COLUMNS = 13;
+  static const float DRIP_SPEED = 1.25f;             // Drip fall speed (rows per frame)
+  static const unsigned long DRIP_SPAWN_DELAY = 100; // ms between drip spawns (reduced from 200ms to 100ms for 2x speed)
 
-  // Clear clock segment only (preserve pole LEDs)
-  segmentManager.fillSegment(leds, SEGMENT_CLOCK, CRGB::Black);
+  // Pole column geometry
+  // Physical structure: Every 13 LEDs forms a vertical column
+  // LED 0 is at BOTTOM, LED 299 is at TOP
+  // Column N consists of LEDs: N, N+13, N+26, N+39, ...
 
-  // Clear eye segments
-  for (int i = 0; i < 5; i++)
+  // Drip structure
+  struct Drip
   {
-    segmentManager.fillSegment(leds, i + SEGMENT_EYE_4, CRGB::Black);
+    bool active;
+    uint8_t column;     // Column (0-12)
+    float height;       // Current height in rows (float for smooth movement, decreases as it falls)
+    uint8_t colorIndex; // Index into palette for color progression
+  };
+
+  static Drip drips[MAX_DRIPS] = {0};
+  static unsigned long lastDripSpawn = 0;
+
+  // Clear pole LEDs
+  fill_solid(poleLeds, POLE_NUM_LEDS, CRGB::Black);
+
+  // 1. Render top 7 LEDs (last 7 indices) with RED color consistently
+  for (uint8_t i = 0; i < 7; i++)
+  {
+    uint16_t poleIndex = POLE_NUM_LEDS - 7 + i;
+    poleLeds[poleIndex] = CRGB::Red;
   }
 
   // Calculate joystick deltas
@@ -2598,50 +2731,167 @@ void LEDDriver::processEyeballMode()
   // Check if joystick is active (outside deadzone)
   bool joystickActive = (abs(deltaX) > JOYSTICK_DEADZONE || abs(deltaY) > JOYSTICK_DEADZONE);
 
+  uint8_t targetColumn = POLE_COLUMNS / 2; // Default to center
+
   if (joystickActive)
   {
-    // Calculate angle from joystick position (in degrees, 0 = 12 o'clock)
+    // Calculate angle from joystick position (in degrees, 0 = North/12 o'clock)
     float angleRadians = atan2(deltaX, deltaY);
     float angleDegrees = angleRadians * 180.0f / PI;
     if (angleDegrees < 0)
       angleDegrees += 360.0f;
 
-    // Calculate magnitude (distance from center)
+    // Map angle to column (0-12)
+    // 0° (North) = center column (6)
+    // Smooth interpolation around 360°
+    targetColumn = (uint8_t)((angleDegrees / 360.0f) * POLE_COLUMNS) % POLE_COLUMNS;
+
+    // Spawn new drip if enough time has passed
+    if (currentTime - lastDripSpawn >= DRIP_SPAWN_DELAY)
+    {
+      // Find an inactive drip slot
+      for (uint8_t i = 0; i < MAX_DRIPS; i++)
+      {
+        if (!drips[i].active)
+        {
+          drips[i].active = true;
+          drips[i].column = targetColumn;
+          drips[i].height = (float)(POLE_HEIGHT - 1); // Start at top row (just below red LEDs)
+          drips[i].colorIndex = 0;                    // Start with first color
+
+          lastDripSpawn = currentTime;
+          break;
+        }
+      }
+    }
+  }
+
+  // 2. Update and render all active drips
+  // Get current palette for drip colors
+  ColorPalette *currentPalette = nullptr;
+  if (patternManager)
+  {
+    currentPalette = patternManager->getPaletteManager().getPalette(selectedPaletteIndex);
+  }
+
+  for (uint8_t i = 0; i < MAX_DRIPS; i++)
+  {
+    if (drips[i].active)
+    {
+      // Move drip DOWN (decreasing height)
+      drips[i].height -= DRIP_SPEED * globalSpeed;
+
+      // Check if drip has fallen off bottom
+      if (drips[i].height < -DRIP_HEIGHT)
+      {
+        drips[i].active = false;
+        continue;
+      }
+
+      // Render 3-row drip with fade in/out
+      for (uint8_t row = 0; row < DRIP_HEIGHT; row++)
+      {
+        int dripRow = (int)drips[i].height - row;
+
+        if (dripRow >= 0 && dripRow < POLE_HEIGHT)
+        {
+          // Calculate LED index: column + (row * 13)
+          uint16_t poleIndex = drips[i].column + (dripRow * POLE_SPIRAL_REPEAT);
+
+          if (poleIndex < POLE_NUM_LEDS - 7) // Don't overwrite top 7 red LEDs
+          {
+            // Calculate fade factor based on position in drip
+            uint8_t fadeFactor;
+            if (row == 0) // Top of drip (head)
+            {
+              fadeFactor = 255;
+            }
+            else if (row == 1) // Middle
+            {
+              fadeFactor = 180;
+            }
+            else // Bottom (tail)
+            {
+              fadeFactor = 100;
+            }
+
+            // Apply fade-in/out based on drip age
+            float ageInRows = (POLE_HEIGHT - 1) - drips[i].height;
+            if (ageInRows < 1.0f) // Fade in during first row
+            {
+              fadeFactor = (uint8_t)(fadeFactor * ageInRows);
+            }
+            else if (drips[i].height < 1.0f) // Fade out during last row
+            {
+              fadeFactor = (uint8_t)(fadeFactor * (drips[i].height + DRIP_HEIGHT));
+            }
+
+            // Get color from palette (cycling through palette as drip falls)
+            CRGB dripColor;
+            if (currentPalette)
+            {
+              uint8_t paletteIndex = (drips[i].colorIndex + (row * 20)) % 256;
+              dripColor = currentPalette->getColor(paletteIndex);
+            }
+            else
+            {
+              dripColor = CRGB::White;
+            }
+
+            dripColor.nscale8(fadeFactor);
+            poleLeds[poleIndex] = dripColor;
+          }
+        }
+      }
+
+      // Update color index for next frame (slow color progression)
+      drips[i].colorIndex = (drips[i].colorIndex + 1) % 256;
+    }
+  }
+
+  // 3. Clear clock and eye segments
+  segmentManager.fillSegment(leds, SEGMENT_CLOCK, CRGB::Black);
+  for (int i = 0; i < 5; i++)
+  {
+    segmentManager.fillSegment(leds, i + SEGMENT_EYE_4, CRGB::Black);
+  }
+
+  // 4. Draw red line on clock
+  if (joystickActive)
+  {
+    float angleRadians = atan2(deltaX, deltaY);
+    float angleDegrees = angleRadians * 180.0f / PI;
+    if (angleDegrees < 0)
+      angleDegrees += 360.0f;
+
     int magnitude = sqrt(deltaX * deltaX + deltaY * deltaY);
     int maxMagnitude = JOYSTICK_MAX - JOYSTICK_CENTER;
-
-    // Map magnitude to line width (1-20 LEDs)
     int lineWidth = map(constrain(magnitude, JOYSTICK_DEADZONE, maxMagnitude),
                         JOYSTICK_DEADZONE, maxMagnitude, 1, 20);
 
-    // Draw red line on clock in the direction of joystick
-    // Use SegmentManager to get LEDs at the specified angle
-    uint16_t rawIndices[20]; // Max width is 20
+    uint16_t rawIndices[20];
     uint8_t count = segmentManager.getRawLEDsAtAngle(SEGMENT_CLOCK, angleDegrees,
                                                      lineWidth, rawIndices, 20);
 
-    // Light up the LEDs in red
     for (uint8_t i = 0; i < count; i++)
     {
       leds[rawIndices[i]] = CRGB::Red;
       leds[rawIndices[i]].nscale8(globalBrightness);
     }
+  }
 
-    // Update eye position based on joystick
-    if (eyeRenderer)
+  // 5. Render eye
+  if (eyeRenderer)
+  {
+    if (joystickActive)
     {
       eyeRenderer->updateEyePosition(joystickState.x, joystickState.y);
-      eyeRenderer->renderEye();
     }
-  }
-  else
-  {
-    // Deadzone: Render center iris position only
-    if (eyeRenderer)
+    else
     {
       eyeRenderer->updateEyePosition(JOYSTICK_CENTER, JOYSTICK_CENTER);
-      eyeRenderer->renderEye();
     }
+    eyeRenderer->renderEye();
   }
 
   show();
@@ -2650,6 +2900,9 @@ void LEDDriver::processEyeballMode()
 void LEDDriver::processJoltMode()
 {
   // Jolt Mode: Magnitude-based palette expansion
+  // Up: Expands from center outward
+  // Down: Fills from edges inward
+  // Deadzone: Shows center row
   unsigned long currentTime = millis();
 
   // Handle palette selection with left/right joystick movement
@@ -2695,11 +2948,27 @@ void LEDDriver::processJoltMode()
   // Store previous joystick X position
   lastDeltaX = deltaX;
 
-  // Calculate jolt magnitude based on joystick Y position
-  uint8_t magnitude = calculateJoltMagnitude(joystickState.y);
+  // Get joystick Y delta
+  int deltaY = joystickState.y - JOYSTICK_CENTER;
 
-  // Render jolt effect based on magnitude
-  renderJoltEffect(magnitude);
+  // Determine jolt direction and magnitude
+  if (abs(deltaY) <= JOLT_DEADZONE_THRESHOLD)
+  {
+    // Deadzone: Show center row with pattern
+    renderJoltEffectDeadzone();
+  }
+  else if (deltaY > 0)
+  {
+    // Moving UP: Original behavior (expand from center outward)
+    uint8_t magnitude = calculateJoltMagnitude(joystickState.y);
+    renderJoltEffectOutward(magnitude);
+  }
+  else
+  {
+    // Moving DOWN: New behavior (fill from edges inward)
+    uint8_t magnitude = calculateJoltMagnitudeDown(joystickState.y);
+    renderJoltEffectInward(magnitude);
+  }
 
   show();
 }
@@ -2870,7 +3139,26 @@ uint8_t LEDDriver::calculateJoltMagnitude(int joystickY)
   return magnitude;
 }
 
-void LEDDriver::renderJoltEffect(uint8_t magnitude)
+uint8_t LEDDriver::calculateJoltMagnitudeDown(int joystickY)
+{
+  // Calculate distance from center (only downward motion)
+  int deltaY = joystickY - JOYSTICK_CENTER;
+
+  // Only consider downward motion (negative deltaY)
+  if (deltaY >= -JOLT_DEADZONE_THRESHOLD)
+  {
+    return 0; // In deadzone or moving up
+  }
+
+  // Smooth dynamic mapping from deadzone to maximum (inverted for downward)
+  // Map deltaY from -JOLT_DEADZONE_THRESHOLD to -JOLT_LEVEL_5_THRESHOLD -> 1 to 255
+  int clampedDelta = constrain(-deltaY, JOLT_DEADZONE_THRESHOLD, JOLT_LEVEL_5_THRESHOLD);
+  uint8_t magnitude = map(clampedDelta, JOLT_DEADZONE_THRESHOLD, JOLT_LEVEL_5_THRESHOLD, 1, 255);
+
+  return magnitude;
+}
+
+void LEDDriver::renderJoltEffectDeadzone()
 {
   // Clear all LEDs first
   fill_solid(leds, NUM_LEDS, CRGB::Black);
@@ -2879,31 +3167,68 @@ void LEDDriver::renderJoltEffect(uint8_t magnitude)
     fill_solid(poleLeds, POLE_NUM_LEDS, CRGB::Black);
   }
 
-  if (magnitude == 0)
+  // Deadzone: Light up center row of pole with pattern colors
+  if (poleLeds && POLE_NUM_LEDS > 0 && patternManager)
   {
-    // Deadzone: Light up center eye and middle row of pole
-    // Center eye (EYE_0)
-    if (EYE_0_RAW_START < NUM_LEDS)
-    {
-      leds[EYE_0_RAW_START] = CRGB::White;
-    }
+    ColorPalette *currentPalette = patternManager->getPaletteManager().getPalette(selectedJoltPaletteIndex);
 
-    // Middle row of pole (approximate center)
-    if (poleLeds && POLE_NUM_LEDS > 0)
+    // Light up middle row (row 11 or 12 out of ~23 rows)
+    int centerRow = (POLE_NUM_LEDS / POLE_SPIRAL_REPEAT) / 2;
+
+    for (uint8_t col = 0; col < POLE_SPIRAL_REPEAT; col++)
     {
-      int middleIndex = POLE_NUM_LEDS / 2;
-      poleLeds[middleIndex] = CRGB::White;
+      uint16_t poleIndex = col + (centerRow * POLE_SPIRAL_REPEAT);
+      if (poleIndex < POLE_NUM_LEDS)
+      {
+        CRGB color = CRGB::White;
+        if (currentPalette)
+        {
+          float position = (float)col / (float)POLE_SPIRAL_REPEAT;
+          color = currentPalette->getColorSmooth(position);
+          color.nscale8(globalBrightness);
+        }
+        poleLeds[poleIndex] = color;
+      }
     }
   }
-  else
+
+  // Center eye (EYE_0)
+  if (EYE_0_RAW_START < NUM_LEDS)
   {
-    // Render rainbow expansion based on magnitude
-    renderJoltPole(magnitude);
-    renderJoltEyeClock(magnitude);
+    leds[EYE_0_RAW_START] = CRGB::White;
+    leds[EYE_0_RAW_START].nscale8(globalBrightness);
   }
 }
 
-void LEDDriver::renderJoltPole(uint8_t magnitude)
+void LEDDriver::renderJoltEffectOutward(uint8_t magnitude)
+{
+  // Clear all LEDs first
+  fill_solid(leds, NUM_LEDS, CRGB::Black);
+  if (poleLeds)
+  {
+    fill_solid(poleLeds, POLE_NUM_LEDS, CRGB::Black);
+  }
+
+  // Original behavior: expand from center outward
+  renderJoltPoleOutward(magnitude);
+  renderJoltEyeClockOutward(magnitude);
+}
+
+void LEDDriver::renderJoltEffectInward(uint8_t magnitude)
+{
+  // Clear all LEDs first
+  fill_solid(leds, NUM_LEDS, CRGB::Black);
+  if (poleLeds)
+  {
+    fill_solid(poleLeds, POLE_NUM_LEDS, CRGB::Black);
+  }
+
+  // New behavior: fill from edges inward
+  renderJoltPoleInward(magnitude);
+  renderJoltEyeClockInward(magnitude);
+}
+
+void LEDDriver::renderJoltPoleOutward(uint8_t magnitude)
 {
   if (!poleLeds || POLE_NUM_LEDS == 0)
     return;
@@ -2961,7 +3286,7 @@ void LEDDriver::renderJoltPole(uint8_t magnitude)
   }
 }
 
-void LEDDriver::renderJoltEyeClock(uint8_t magnitude)
+void LEDDriver::renderJoltEyeClockOutward(uint8_t magnitude)
 {
   // Smooth expansion based on magnitude (0-255)
   // Map magnitude to ring expansion: 0-42 = EYE_0, 43-85 = +EYE_1, etc.
@@ -3042,6 +3367,175 @@ void LEDDriver::renderJoltEyeClock(uint8_t magnitude)
         ledsToLight = 1; // At least 1 LED
 
       // Fill the ring with rainbow color
+      for (int i = 0; i < ledsToLight; i++)
+      {
+        int ledIndex = rawStartLED + i;
+        if (ledIndex < NUM_LEDS)
+        {
+          leds[ledIndex] = color;
+        }
+      }
+    }
+  }
+}
+
+// ============================================================================
+// JOLT MODE INWARD VARIANTS (Filling from edges inward)
+// ============================================================================
+
+void LEDDriver::renderJoltPoleInward(uint8_t magnitude)
+{
+  if (!poleLeds || POLE_NUM_LEDS == 0)
+    return;
+
+  // Calculate how much of the pole to fill based on magnitude (0-255)
+  // Fill from top and bottom edges toward center
+  float expansionPercent = (float)magnitude / 255.0f; // Smooth 0-100% expansion
+  int totalRows = POLE_NUM_LEDS / POLE_SPIRAL_REPEAT;
+  // At magnitude 255, we should fill (totalRows / 2) rows from each side, meeting in the middle
+  // Add +1 to ensure we reach the center row
+  int maxRowsFromEachSide = (totalRows + 1) / 2; // Rounds up to include center
+  int rowsToFill = (int)(expansionPercent * maxRowsFromEachSide);
+
+  // Fill from top and bottom toward center
+  for (int rowOffset = 0; rowOffset < rowsToFill; rowOffset++)
+  {
+    // Get color from selected palette based on position
+    CRGB color = CRGB::White; // Default fallback
+
+    if (patternManager)
+    {
+      ColorPalette *currentPalette = patternManager->getPaletteManager().getPalette(selectedJoltPaletteIndex);
+      if (currentPalette && rowsToFill > 0)
+      {
+        float palettePosition = (float)rowOffset / (float)rowsToFill; // 0.0 to 1.0
+        color = currentPalette->getColorSmooth(palettePosition);
+        color.nscale8(globalBrightness);
+      }
+      else
+      {
+        uint8_t hue = (rowOffset * 255) / max(1, rowsToFill);
+        color = CHSV(hue, 255, globalBrightness);
+      }
+    }
+    else
+    {
+      uint8_t hue = (rowOffset * 255) / max(1, rowsToFill);
+      color = CHSV(hue, 255, globalBrightness);
+    }
+
+    // Fill row from top (high indices)
+    int topRow = totalRows - 1 - rowOffset;
+    for (uint8_t col = 0; col < POLE_SPIRAL_REPEAT; col++)
+    {
+      uint16_t topIndex = col + (topRow * POLE_SPIRAL_REPEAT);
+      if (topIndex < POLE_NUM_LEDS)
+      {
+        poleLeds[topIndex] = color;
+      }
+    }
+
+    // Fill row from bottom (low indices)
+    int bottomRow = rowOffset;
+    for (uint8_t col = 0; col < POLE_SPIRAL_REPEAT; col++)
+    {
+      uint16_t bottomIndex = col + (bottomRow * POLE_SPIRAL_REPEAT);
+      if (bottomIndex < POLE_NUM_LEDS)
+      {
+        poleLeds[bottomIndex] = color;
+      }
+    }
+  }
+}
+
+void LEDDriver::renderJoltEyeClockInward(uint8_t magnitude)
+{
+  // Fill from outer edges (clock) inward to center (EYE_0)
+  // Smooth expansion based on magnitude (0-255)
+  // At magnitude 255, we want all 6 rings fully lit (ringExpansion >= 6.0)
+  float ringExpansion = (magnitude / 255.0f) * 6.0f; // 0.0 to 6.0 rings
+
+  // Light up rings from outside in: CLOCK (5) -> EYE_4 (4) -> ... -> EYE_0 (0)
+  for (int ring = 5; ring >= 0; ring--)
+  {
+    // Calculate which ring we're filling based on expansion
+    // At magnitude 0, no rings lit
+    // At magnitude 255, all 6 rings lit (including center EYE_0)
+    int ringsFromOutside = 5 - ring; // 0 for CLOCK, 5 for EYE_0
+    float ringThreshold = (float)ringsFromOutside;
+
+    // Use >= to ensure the last ring (EYE_0) lights up when ringExpansion reaches exactly 6.0
+    if (ringExpansion >= ringThreshold)
+    {
+      // Calculate how much of this ring to light up
+      float ringProgress = min(1.0f, ringExpansion - ringThreshold);
+
+      // Get color from selected palette for this ring
+      CRGB color = CRGB::White; // Default fallback
+
+      if (patternManager)
+      {
+        ColorPalette *currentPalette = patternManager->getPaletteManager().getPalette(selectedJoltPaletteIndex);
+        if (currentPalette)
+        {
+          // Invert palette position so outer rings get different colors than inner
+          float palettePosition = (float)ringsFromOutside / 6.0f; // 0.0 to 1.0 across 6 rings
+          color = currentPalette->getColorSmooth(palettePosition);
+          // Apply brightness and ring progress
+          color.nscale8((uint8_t)(globalBrightness * ringProgress));
+        }
+        else
+        {
+          // Fallback to rainbow if no palette available
+          uint8_t hue = (ringsFromOutside * 255) / 6;
+          color = CHSV(hue, 255, (uint8_t)(globalBrightness * ringProgress));
+        }
+      }
+      else
+      {
+        // Fallback to rainbow if no pattern manager
+        uint8_t hue = (ringsFromOutside * 255) / 6;
+        color = CHSV(hue, 255, (uint8_t)(globalBrightness * ringProgress));
+      }
+
+      // Light up the appropriate ring
+      int rawStartLED, count;
+      switch (ring)
+      {
+      case 0:
+        rawStartLED = EYE_0_RAW_START;
+        count = EYE_0_COUNT;
+        break;
+      case 1:
+        rawStartLED = EYE_1_RAW_START;
+        count = EYE_1_COUNT;
+        break;
+      case 2:
+        rawStartLED = EYE_2_RAW_START;
+        count = EYE_2_COUNT;
+        break;
+      case 3:
+        rawStartLED = EYE_3_RAW_START;
+        count = EYE_3_COUNT;
+        break;
+      case 4:
+        rawStartLED = EYE_4_RAW_START;
+        count = EYE_4_COUNT;
+        break;
+      case 5:
+        rawStartLED = CLOCK_RAW_START;
+        count = CLOCK_COUNT;
+        break;
+      default:
+        continue;
+      }
+
+      // For partial rings, only light up portion based on progress
+      int ledsToLight = (int)(count * ringProgress);
+      if (ledsToLight == 0 && ringProgress > 0)
+        ledsToLight = 1; // At least 1 LED
+
+      // Fill the ring with color
       for (int i = 0; i < ledsToLight; i++)
       {
         int ledIndex = rawStartLED + i;

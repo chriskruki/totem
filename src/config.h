@@ -198,10 +198,11 @@ const uint16_t SPEED_LED_POSITIONS[SPEED_PREVIEW_LEDS] = {
 #define CAPTIVE_PORTAL_TITLE "Clock Totem" // Title shown in captive portal
 
 // Joystick calibration values
-#define JOYSTICK_MIN 0        // Minimum ADC value (12-bit ADC)
-#define JOYSTICK_MAX 4095     // Maximum ADC value (12-bit ADC)
-#define JOYSTICK_CENTER 1790  // Center position (0-4095 range)
-#define JOYSTICK_DEADZONE 300 // Deadzone around center (scaled for 4095 range)
+#define JOYSTICK_MIN 0               // Minimum ADC value (12-bit ADC)
+#define JOYSTICK_MAX 4095            // Maximum ADC value (12-bit ADC)
+#define JOYSTICK_CENTER 1790         // Center position (0-4095 range)
+#define JOYSTICK_DEADZONE 300        // Deadzone around center (scaled for 4095 range)
+#define JOYSTICK_HARD_PUSH_MARGIN 50 // Distance from edge to be considered a 'hard' push
 
 // Update intervals
 #define LED_UPDATE_INTERVAL 16    // ~60 FPS (16ms)

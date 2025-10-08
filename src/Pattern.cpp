@@ -1385,17 +1385,25 @@ bool PoleSpiralChasePattern::update(unsigned long currentTime)
   return true;
 }
 
-// PoleHelixPattern implementation - Bouncing 3x4 Block
+// PoleHelixPattern implementation - Three Independent Bouncing Helixes
 PoleHelixPattern::PoleHelixPattern(CRGB *leds, int numLeds, CRGB *poleLeds, int poleNumLeds)
-    : PolePattern(leds, numLeds, poleLeds, poleNumLeds, 40),
-      helixPhase(0),          // Fixed-point: 0-65535 represents 0-2π
-      numHelixes(4),          // 4 columns
-      helixSpeed(6554),       // 0.1 * 65535 ≈ 6554 (10% speed)
-      verticalPosition(0.0f), // Start at bottom
-      verticalSpeed(0.05f),   // Speed of vertical movement
-      movingUp(true),         // Start moving upward
-      helixHeight(3)          // 3 rows tall
+    : PolePattern(leds, numLeds, poleLeds, poleNumLeds, 40)
 {
+  // Initialize 3 helixes at different starting positions with different speeds
+  // Helix 0: Start at bottom, slower speed
+  helixes[0].verticalPosition = 0.0f;
+  helixes[0].verticalSpeed = 0.04f;
+  helixes[0].movingUp = true;
+
+  // Helix 1: Start at middle, medium speed
+  helixes[1].verticalPosition = 0.5f;
+  helixes[1].verticalSpeed = 0.05f;
+  helixes[1].movingUp = true;
+
+  // Helix 2: Start at top, faster speed
+  helixes[2].verticalPosition = 1.0f;
+  helixes[2].verticalSpeed = 0.06f;
+  helixes[2].movingUp = false; // Start moving down
 }
 
 bool PoleHelixPattern::update(unsigned long currentTime)
@@ -1408,76 +1416,118 @@ bool PoleHelixPattern::update(unsigned long currentTime)
   // Clear pole LEDs
   fill_solid(poleLeds, poleNumLeds, CRGB::Black);
 
-  // Update helix phase (fixed-point, auto-wraps at 65536)
-  helixPhase += (uint16_t)(speed * helixSpeed);
+  // Define the 3 staggered layers for each helix
+  // Layer 1: base + 0, 1, 2
+  // Layer 2: base + 3, 4, 5 (staggered by +3)
+  // Layer 3: base + 6, 7, 8 (staggered by +6)
+  uint8_t layerOffsets[3][3] = {
+      {0, 1, 2}, // Layer 1
+      {3, 4, 5}, // Layer 2
+      {6, 7, 8}  // Layer 3
+  };
 
-  // Update vertical position
-  float adjustedVerticalSpeed = verticalSpeed * speed;
+  uint8_t maxSteps = (poleNumLeds - 9) / 6; // Maximum number of 6-LED steps that fit
 
-  if (movingUp)
+  // Update and render each helix independently
+  for (uint8_t helixIdx = 0; helixIdx < NUM_HELIXES; helixIdx++)
   {
-    verticalPosition += adjustedVerticalSpeed;
-    if (verticalPosition >= 1.0f)
+    Helix &helix = helixes[helixIdx];
+
+    // Update vertical position for this helix
+    float adjustedVerticalSpeed = helix.verticalSpeed * speed;
+
+    if (helix.movingUp)
     {
-      verticalPosition = 1.0f;
-      movingUp = false; // Start moving down
-    }
-  }
-  else
-  {
-    verticalPosition -= adjustedVerticalSpeed;
-    if (verticalPosition <= 0.0f)
-    {
-      verticalPosition = 0.0f;
-      movingUp = true; // Start moving up
-    }
-  }
-
-  // Calculate the height range for the 3-row helix block
-  uint8_t maxHeight = 20; // Assuming pole height is 0-19
-  float blockRangeFloat = (float)(maxHeight - helixHeight);
-  uint8_t blockBottomHeight = (uint8_t)(verticalPosition * blockRangeFloat);
-  uint8_t blockTopHeight = blockBottomHeight + helixHeight;
-
-  // Create helix block (4 columns, 3 rows)
-  for (uint16_t i = 0; i < poleNumLeds; i++)
-  {
-    uint8_t height = getPoleHeight(i);
-    uint8_t column = getPoleColumn(i);
-
-    // Check if this LED is within the vertical range of the helix block
-    if (height >= blockBottomHeight && height < blockTopHeight)
-    {
-      // Calculate which column this LED should light up based on helix phase
-      // Each of the 4 helixes occupies one column
-      uint16_t columnOffset = (65535 / numHelixes) * column;
-      uint16_t helixPos16 = helixPhase + columnOffset;
-
-      // Use sin16 to create the helix pattern
-      // Map height within the block (0-2) to a phase offset
-      uint8_t localHeight = height - blockBottomHeight;
-      helixPos16 += localHeight * 21845; // 21845 ≈ 65535/3 (for 3 rows)
-
-      int16_t sinValue = sin16(helixPos16);
-
-      // Determine if this LED should be lit
-      // Create a rotating pattern across the 4 columns
-      uint8_t targetColumn = ((uint32_t)(sinValue + 32768) * POLE_SPIRAL_REPEAT) >> 16;
-
-      // Check if this column matches (with some tolerance for smoothness)
-      int8_t columnDistance = abs((int8_t)column - (int8_t)targetColumn);
-      if (columnDistance > (int8_t)(POLE_SPIRAL_REPEAT / 2))
+      helix.verticalPosition += adjustedVerticalSpeed;
+      if (helix.verticalPosition >= 1.0f)
       {
-        columnDistance = POLE_SPIRAL_REPEAT - columnDistance; // Wrap around
+        helix.verticalPosition = 1.0f;
+        helix.movingUp = false; // Start moving down
       }
-
-      if (columnDistance == 0)
+    }
+    else
+    {
+      helix.verticalPosition -= adjustedVerticalSpeed;
+      if (helix.verticalPosition <= 0.0f)
       {
-        // Get color from palette
-        uint8_t palettePos = (column * 64) + (localHeight * 85) + (currentTime >> 11);
-        CRGB rgbColor = getPaletteColor(palettePos / 255.0f);
-        rgbColor.nscale8(brightness);
-        poleLeds[i] = rgbColor;
+        helix.verticalPosition = 0.0f;
+        helix.movingUp = true; // Start moving up
+      }
+    }
+
+    // Calculate the current base LED index for this helix
+    // verticalPosition: 0.0 = top (LED indices near 300), 1.0 = bottom (LED 0, 1, 2)
+    uint8_t currentStep = (uint8_t)((1.0f - helix.verticalPosition) * maxSteps); // Invert so 0.0 = top, 1.0 = bottom
+    uint16_t baseIndex = currentStep * 6;
+
+    // Light up all 3 layers (9 LEDs total) for this helix
+    for (uint8_t layer = 0; layer < 3; layer++)
+    {
+      for (uint8_t led = 0; led < 3; led++)
+      {
+        uint16_t ledIndex = baseIndex + layerOffsets[layer][led];
+
+        if (ledIndex < poleNumLeds)
+        {
+          // Get color from palette based on helix index and layer
+          // Each helix gets a different section of the palette
+          float helixPaletteOffset = (float)helixIdx / (float)NUM_HELIXES;
+          float layerOffset = ((float)(layer * 3 + led)) / (9.0f * NUM_HELIXES);
+          float palettePos = helixPaletteOffset + layerOffset;
+
+          CRGB rgbColor = getPaletteColor(palettePos);
+
+          // Calculate fade factor based on position in the helix (vertical fade)
+          // Fade in/out at the edges (layer 0 = head, layer 2 = tail)
+          uint8_t fadeFactor = 255;
+
+          // Apply gradient fade across the 3 layers
+          if (layer == 0)
+          {
+            fadeFactor = 180; // Head is slightly dimmer
+          }
+          else if (layer == 1)
+          {
+            fadeFactor = 255; // Middle is brightest
+          }
+          else // layer == 2
+          {
+            fadeFactor = 140; // Tail is dimmest
+          }
+
+          // Additional fade based on position near edges (top/bottom of pole)
+          float edgeFadeDistance = 0.15f; // Fade within top/bottom 15% of pole
+          float edgeFade = 1.0f;
+
+          if (helix.verticalPosition < edgeFadeDistance)
+          {
+            // Fading out near bottom
+            edgeFade = helix.verticalPosition / edgeFadeDistance;
+          }
+          else if (helix.verticalPosition > (1.0f - edgeFadeDistance))
+          {
+            // Fading out near top
+            edgeFade = (1.0f - helix.verticalPosition) / edgeFadeDistance;
+          }
+
+          // Apply all fade factors
+          fadeFactor = (uint8_t)(fadeFactor * edgeFade);
+          rgbColor.nscale8(fadeFactor);
+          rgbColor.nscale8(brightness);
+
+          // Use additive blending if another helix already lit this LED
+          if (poleLeds[ledIndex].r > 0 || poleLeds[ledIndex].g > 0 || poleLeds[ledIndex].b > 0)
+          {
+            // Average the colors when helixes overlap
+            poleLeds[ledIndex].r = (poleLeds[ledIndex].r + rgbColor.r) / 2;
+            poleLeds[ledIndex].g = (poleLeds[ledIndex].g + rgbColor.g) / 2;
+            poleLeds[ledIndex].b = (poleLeds[ledIndex].b + rgbColor.b) / 2;
+          }
+          else
+          {
+            poleLeds[ledIndex] = rgbColor;
+          }
+        }
       }
     }
   }
