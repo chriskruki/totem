@@ -141,6 +141,32 @@ public:
    */
   void printSegmentInfo() const;
 
+  /**
+   * @brief Get raw LED indices at a specific angle (0-360 degrees) for a segment
+   * @param segmentType The segment type
+   * @param angleDegrees Angle in degrees (0 = 12 o'clock, 90 = 3 o'clock, etc.)
+   * @param width Number of LEDs to return (centered on angle, default = 1)
+   * @param rawIndices Output array to store raw LED indices
+   * @param maxIndices Maximum size of rawIndices array
+   * @return Number of indices written to rawIndices array
+   */
+  uint8_t getRawLEDsAtAngle(uint8_t segmentType, float angleDegrees, uint8_t width,
+                            uint16_t *rawIndices, uint8_t maxIndices) const;
+
+  /**
+   * @brief Get raw LED indices at a specific angle across multiple segments
+   * @param segmentTypes Array of segment types to query
+   * @param numSegments Number of segments in segmentTypes array
+   * @param angleDegrees Angle in degrees (0 = 12 o'clock, 90 = 3 o'clock, etc.)
+   * @param width Number of LEDs per segment (centered on angle)
+   * @param rawIndices Output array to store raw LED indices
+   * @param maxIndices Maximum size of rawIndices array
+   * @return Number of indices written to rawIndices array
+   */
+  uint8_t getRawLEDsAtAngleMulti(const uint8_t *segmentTypes, uint8_t numSegments,
+                                 float angleDegrees, uint8_t width,
+                                 uint16_t *rawIndices, uint8_t maxIndices) const;
+
 private:
   LEDSegment segments[NUM_TOTAL_RINGS]; ///< Array of all LED segments
 

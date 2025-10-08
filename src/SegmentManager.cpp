@@ -257,7 +257,7 @@ const char *SegmentManager::getSegmentName(uint8_t segmentType) const
 void SegmentManager::printSegmentInfo() const
 {
   Serial.println("=== LED Segment Information ===");
-  Serial.println("Physical Wiring: CLOCK (0-100) -> EYE rings (101-161)");
+  Serial.println("Physical Wiring: CLOCK (0-99) -> EYE rings (100-160)");
   Serial.println("Logical Indexing: All segments start at 12 o'clock (index 0)");
   Serial.println("");
 
@@ -287,4 +287,86 @@ void SegmentManager::printSegmentInfo() const
   Serial.print("Total LEDs: ");
   Serial.println(NUM_LEDS);
   Serial.println("===============================");
+}
+
+/**
+ * @brief Get raw LED indices at a specific angle for a segment
+ *
+ * Converts angular position (0-360 degrees) to raw LED indices, respecting the
+ * logical mapping where 0 degrees = 12 o'clock position.
+ */
+uint8_t SegmentManager::getRawLEDsAtAngle(uint8_t segmentType, float angleDegrees,
+                                          uint8_t width, uint16_t *rawIndices,
+                                          uint8_t maxIndices) const
+{
+  const LEDSegment *seg = getSegment(segmentType);
+  if (!seg || !rawIndices || maxIndices == 0)
+  {
+    return 0;
+  }
+
+  // Normalize angle to 0-360 range
+  while (angleDegrees < 0.0f)
+    angleDegrees += 360.0f;
+  while (angleDegrees >= 360.0f)
+    angleDegrees -= 360.0f;
+
+  // Convert angle to position (0.0-1.0)
+  float position = angleDegrees / 360.0f;
+
+  // Calculate center LED index in logical space
+  int centerLogicalIndex = (int)(position * seg->count) % seg->count;
+
+  // Calculate LED indices with width (spread around center)
+  uint8_t numWritten = 0;
+  int halfWidth = width / 2;
+
+  for (int offset = -halfWidth; offset <= halfWidth && numWritten < maxIndices; offset++)
+  {
+    int logicalIndex = (centerLogicalIndex + offset + seg->count) % seg->count;
+
+    // Get raw index from logical index
+    int16_t rawIndex = getRawLEDIndex(segmentType, logicalIndex);
+    if (rawIndex >= 0)
+    {
+      rawIndices[numWritten++] = (uint16_t)rawIndex;
+    }
+  }
+
+  return numWritten;
+}
+
+/**
+ * @brief Get raw LED indices at a specific angle across multiple segments
+ *
+ * This is useful for synchronized patterns that apply the same angular effect
+ * across multiple rings (e.g., chase at 90 degrees on clock, eye_4, and eye_2).
+ */
+uint8_t SegmentManager::getRawLEDsAtAngleMulti(const uint8_t *segmentTypes,
+                                               uint8_t numSegments, float angleDegrees,
+                                               uint8_t width, uint16_t *rawIndices,
+                                               uint8_t maxIndices) const
+{
+  if (!segmentTypes || !rawIndices || maxIndices == 0 || numSegments == 0)
+  {
+    return 0;
+  }
+
+  uint8_t totalWritten = 0;
+
+  // Get LEDs from each segment
+  for (uint8_t i = 0; i < numSegments; i++)
+  {
+    uint8_t remainingSpace = maxIndices - totalWritten;
+    if (remainingSpace == 0)
+    {
+      break; // Output buffer full
+    }
+
+    uint8_t numWritten = getRawLEDsAtAngle(segmentTypes[i], angleDegrees, width,
+                                           &rawIndices[totalWritten], remainingSpace);
+    totalWritten += numWritten;
+  }
+
+  return totalWritten;
 }

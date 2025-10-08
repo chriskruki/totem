@@ -6,14 +6,14 @@
 // ============================================================================
 // LED CONFIGURATION & INDEXING SYSTEM
 // ============================================================================
-// Physical wiring: CLOCK (0-100) -> EYE rings (101-161)
+// Physical wiring: CLOCK (0-99) -> EYE rings (100-160)
 // All code uses LOGICAL indices where 0 = 12 o'clock position
 // Helper arrays (CLOCK_LED_MAP, EYE_X_LED_MAP) convert logical->raw indices
 
 // Total LED counts
-#define CLOCK_TOTAL_LEDS 101 // Clock ring LED count
+#define CLOCK_TOTAL_LEDS 100 // Clock ring LED count
 #define EYE_TOTAL_LEDS 61    // Total LEDs in all eye rings
-#define NUM_LEDS 162         // Total LED count (101 Clock + 61 Eye)
+#define NUM_LEDS 161         // Total LED count (100 Clock + 61 Eye)
 
 // Hardware configuration
 #define DATA_PIN 13      // GPIO pin connected to LED data line
@@ -40,16 +40,16 @@
 // ============================================================================
 // RAW LED INDICES (Physical Wiring Order)
 // ============================================================================
-// Clock: Raw indices 0-100, starts at 6 o'clock, goes counter-clockwise
-// Eye:   Raw indices 101-161, starts at 6 o'clock (EYE_4), goes clockwise
+// Clock: Raw indices 0-99, starts at 6 o'clock, goes counter-clockwise
+// Eye:   Raw indices 100-160, starts at 6 o'clock (EYE_4), goes clockwise
 
 // Clock Ring - Raw Indices (counter-clockwise from 6 o'clock)
 #define CLOCK_RAW_START 0
-#define CLOCK_RAW_END 100
-#define CLOCK_COUNT 101
+#define CLOCK_RAW_END 99
+#define CLOCK_COUNT 100
 
 // Eye Ring Raw Indices (clockwise from 6 o'clock, outermost first)
-#define EYE_4_RAW_START 101 // Outermost ring
+#define EYE_4_RAW_START 100 // Outermost ring
 #define EYE_4_COUNT 24
 #define EYE_4_RAW_END (EYE_4_RAW_START + EYE_4_COUNT - 1) // 124
 
@@ -65,9 +65,9 @@
 #define EYE_1_COUNT 8
 #define EYE_1_RAW_END (EYE_1_RAW_START + EYE_1_COUNT - 1) // 160
 
-#define EYE_0_RAW_START (EYE_1_RAW_END + 1) // 161 (center LED)
+#define EYE_0_RAW_START (EYE_1_RAW_END + 1) // 160 (center LED)
 #define EYE_0_COUNT 1
-#define EYE_0_RAW_END EYE_0_RAW_START // 161
+#define EYE_0_RAW_END EYE_0_RAW_START // 160
 
 // ============================================================================
 // LOGICAL LED MAPPING ARRAYS
@@ -84,6 +84,35 @@ extern const uint16_t EYE_1_LED_MAP[EYE_1_COUNT];
 // Combined eye mapping array (all eye rings in one array, outer to inner)
 // EYE_4[0-23] -> EYE_3[24-39] -> EYE_2[40-51] -> EYE_1[52-59] -> EYE_0[60]
 extern const uint16_t EYE_TOTAL_LED_MAP[EYE_TOTAL_LEDS];
+
+/**
+ * @brief Convert logical LED index to raw LED index across entire strip
+ * @param logicalIndex Logical index (0 = 12 o'clock on clock, 0-160 total)
+ * @return Raw LED index for FastLED array
+ *
+ * Logical mapping:
+ * - 0-99: Clock ring (logical 0 = 12 o'clock position)
+ * - 100-160: Eye rings (logical 100 = 12 o'clock position on EYE_4)
+ */
+inline uint16_t logicalToRawIndex(uint16_t logicalIndex)
+{
+    if (logicalIndex < CLOCK_COUNT)
+    {
+        // Clock ring: Use CLOCK_LED_MAP
+        return CLOCK_LED_MAP[logicalIndex];
+    }
+    else if (logicalIndex < NUM_LEDS)
+    {
+        // Eye rings: Use EYE_TOTAL_LED_MAP
+        uint16_t eyeLogicalIndex = logicalIndex - CLOCK_COUNT;
+        return EYE_TOTAL_LED_MAP[eyeLogicalIndex];
+    }
+    else
+    {
+        // Out of bounds, return 0 (safe fallback)
+        return 0;
+    }
+}
 
 // Segment Type Definitions
 #define SEGMENT_CLOCK 0
@@ -117,7 +146,7 @@ const uint16_t BRIGHTNESS_LED_POSITIONS[BRIGHTNESS_PREVIEW_LEDS] = {
     EYE_3_LED_MAP[8],  // Level 1: EYE_3 at 6 o'clock - logical 7 (16/2 - 1)
     EYE_2_LED_MAP[6],  // Level 2: EYE_2 at 6 o'clock - logical 5 (12/2 - 1)
     EYE_1_LED_MAP[4],  // Level 3: EYE_1 at 6 o'clock - logical 3 (8/2 - 1)
-    EYE_0_RAW_START,   // Level 4: EYE_0 center (raw 161)
+    EYE_0_RAW_START,   // Level 4: EYE_0 center (raw 160)
     EYE_1_LED_MAP[0],  // Level 5: EYE_1 at 12 o'clock (top)
     EYE_2_LED_MAP[0],  // Level 6: EYE_2 at 12 o'clock
     EYE_3_LED_MAP[0],  // Level 7: EYE_3 at 12 o'clock
@@ -131,7 +160,7 @@ const uint16_t SPEED_LED_POSITIONS[SPEED_PREVIEW_LEDS] = {
     EYE_3_LED_MAP[12], // Level 1: EYE_3 at 9 o'clock - logical 11 (3*16/4 - 1)
     EYE_2_LED_MAP[9],  // Level 2: EYE_2 at 9 o'clock - logical 8 (3*12/4 - 1)
     EYE_1_LED_MAP[6],  // Level 3: EYE_1 at 9 o'clock - logical 5 (3*8/4 - 1)
-    EYE_0_RAW_START,   // Level 4: EYE_0 center (raw 161)
+    EYE_0_RAW_START,   // Level 4: EYE_0 center (raw 160)
     EYE_1_LED_MAP[2],  // Level 5: EYE_1 at 3 o'clock (right) - logical 1 (8/4 - 1)
     EYE_2_LED_MAP[3],  // Level 6: EYE_2 at 3 o'clock - logical 2 (12/4 - 1)
     EYE_3_LED_MAP[4],  // Level 7: EYE_3 at 3 o'clock - logical 3 (16/4 - 1)
@@ -140,7 +169,7 @@ const uint16_t SPEED_LED_POSITIONS[SPEED_PREVIEW_LEDS] = {
 
 // Brightness settings (0-255)
 #define DEFAULT_BRIGHTNESS 50
-#define MAX_BRIGHTNESS 255
+#define MAX_BRIGHTNESS 200
 
 // Power Management and Safety Limits
 #define MAX_CURRENT_MA 1500        // Maximum allowed current draw in milliamps
@@ -253,7 +282,7 @@ extern uint8_t currentSubMode;
 #define POINTER_BG_BRIGHTNESS 30 // Brightness for background LEDs
 
 // Joystick Button Settings
-#define BUTTON_HOLD_DURATION 2000 // Duration to hold button for mode change (ms)
+#define BUTTON_HOLD_DURATION 1000 // Duration to hold button for mode change (ms)
 #define BUTTON_HOLD_THRESHOLD 100 // Minimum hold time to distinguish from bounce (ms)
 
 // Calibration settings

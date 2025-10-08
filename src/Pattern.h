@@ -111,14 +111,15 @@ public:
 class Pattern
 {
 protected:
-  CRGB *leds;                   // Pointer to LED array
-  int numLeds;                  // Number of LEDs
-  unsigned long lastUpdate;     // Last update time
-  unsigned long updateInterval; // Update interval in milliseconds
-  bool isActive;                // Pattern active state
-  ColorPalette *currentPalette; // Current color palette
-  uint8_t brightness;           // Pattern brightness (0-255)
-  float speed;                  // Pattern speed multiplier
+  CRGB *leds;                     // Pointer to LED array
+  int numLeds;                    // Number of LEDs
+  unsigned long lastUpdate;       // Last update time
+  unsigned long updateInterval;   // Update interval in milliseconds
+  bool isActive;                  // Pattern active state
+  ColorPalette *currentPalette;   // Current color palette
+  uint8_t brightness;             // Pattern brightness (0-255)
+  float speed;                    // Pattern speed multiplier (global control)
+  float speedNormalizationFactor; // Speed magnitude adjustment (pattern-specific)
 
 public:
   /**
@@ -168,6 +169,18 @@ public:
    * @param speed Speed multiplier (0.1 to 10.0)
    */
   void setSpeed(float speed);
+
+  /**
+   * @brief Set speed normalization factor (how much global speed affects this pattern)
+   * @param factor Speed magnitude adjustment (1.0 = default, higher = faster)
+   */
+  void setSpeedNormalizationFactor(float factor) { this->speedNormalizationFactor = factor; }
+
+  /**
+   * @brief Get effective speed (speed * speedNormalizationFactor)
+   * @return Normalized speed value
+   */
+  float getEffectiveSpeed() const { return speed * speedNormalizationFactor; }
 
   /**
    * @brief Set pattern active state
@@ -244,6 +257,63 @@ public:
   void setTrailLength(uint8_t length);
   String getName() const override { return "Chase"; }
   String getDescription() const override { return "Moving dot with fading trail"; }
+};
+
+/**
+ * @brief Synchronized chase pattern across multiple segments by angle
+ *
+ * Applies chase effect at the same angular position across selected segments.
+ * Example: Chase at 90 degrees (3 o'clock) simultaneously on CLOCK, EYE_4, and EYE_2.
+ * Inner rings appear to move slower but maintain the same clock position.
+ */
+class SynchronizedChasePattern : public Pattern
+{
+private:
+  SegmentManager *segmentManager; // Segment manager for angle calculations
+  float currentAngle;             // Current angular position (0-360 degrees)
+  float angularSpeed;             // Degrees per update
+  uint8_t trailWidth;             // Number of LEDs in trail (per segment)
+  uint8_t targetSegments[6];      // Array of segment types to target
+  uint8_t numTargetSegments;      // Number of segments in targetSegments array
+  ColorPalette *palette;          // Optional palette for multi-color chase
+
+public:
+  /**
+   * @brief Constructor for SynchronizedChasePattern
+   * @param leds Pointer to LED array
+   * @param numLeds Number of LEDs
+   * @param segManager Pointer to SegmentManager
+   * @param segments Array of segment types to apply effect to (e.g., {SEGMENT_CLOCK, SEGMENT_EYE_4})
+   * @param numSegments Number of segments in segments array
+   * @param trailWidth Width of chase trail per segment
+   */
+  SynchronizedChasePattern(CRGB *leds, int numLeds, SegmentManager *segManager,
+                           const uint8_t *segments, uint8_t numSegments,
+                           uint8_t trailWidth = 3);
+
+  bool update(unsigned long currentTime) override;
+
+  /**
+   * @brief Set angular speed (degrees per update)
+   * @param degreesPerUpdate Angular speed
+   */
+  void setAngularSpeed(float degreesPerUpdate) { this->angularSpeed = degreesPerUpdate; }
+
+  /**
+   * @brief Set trail width (LEDs per segment)
+   * @param width Trail width
+   */
+  void setTrailWidth(uint8_t width) { this->trailWidth = width; }
+
+  /**
+   * @brief Set target segments
+   * @param segments Array of segment types
+   * @param numSegments Number of segments
+   */
+  void setTargetSegments(const uint8_t *segments, uint8_t numSegments);
+
+  String getName() const override { return "Synchronized Chase"; }
+  String getDescription() const override { return "Chase synchronized across multiple rings by angle"; }
 };
 
 /**
@@ -373,18 +443,18 @@ class RipplePattern : public Pattern
 {
 private:
   SegmentManager *segmentManager;
-  float currentRingPosition; // Current ring position (0.0 to NUM_RINGS-1)
-  bool bouncingOutward;      // Direction of bounce (true = outward, false = inward)
-  float bounceSpeed;         // Speed of ring movement
-  uint8_t ringIntensity;     // Brightness of the active ring
-  unsigned long lastUpdate;  // Last update time for smooth animation
+  uint16_t currentRingPosition; // Current ring position (fixed-point: 0-32768 = 0.0 to 5.0 rings)
+  bool bouncingOutward;         // Direction of bounce (true = outward, false = inward)
+  uint16_t bounceSpeed;         // Speed of ring movement (fixed-point)
+  uint8_t ringIntensity;        // Brightness of the active ring
+  unsigned long lastUpdate;     // Last update time for smooth animation
 
 public:
   RipplePattern(CRGB *leds, int numLeds, SegmentManager *segManager, unsigned long interval = 1000);
   bool update(unsigned long currentTime) override;
   void setBounceSpeed(float speed);
   String getName() const override { return "Ripple"; }
-  String getDescription() const override { return "Bouncing ring between inner and outer rings"; }
+  String getDescription() const override { return "Bouncing ring (Optimized)"; }
 };
 
 /**
@@ -530,15 +600,15 @@ public:
 class PoleHelixPattern : public PolePattern
 {
 private:
-  float helixPhase;   // Current helix phase
-  uint8_t numHelixes; // Number of parallel helixes
-  float helixSpeed;   // Speed of helix rotation
+  uint16_t helixPhase; // Current helix phase (fixed-point: 0-65535 = 0-2π)
+  uint8_t numHelixes;  // Number of parallel helixes
+  uint16_t helixSpeed; // Speed of helix rotation (fixed-point)
 
 public:
   PoleHelixPattern(CRGB *leds, int numLeds, CRGB *poleLeds, int poleNumLeds);
   bool update(unsigned long currentTime) override;
   String getName() const override { return "PoleHelix"; }
-  String getDescription() const override { return "Multiple helical waves around pole"; }
+  String getDescription() const override { return "Multiple helical waves around pole (Optimized)"; }
 };
 
 /**
@@ -568,18 +638,21 @@ public:
 class PoleBouncePattern : public PolePattern
 {
 private:
-  float wave1Position; // Position of first wave (0.0 to 1.0)
-  float wave2Position; // Position of second wave (0.0 to 1.0)
-  bool wave1Direction; // True = up, False = down
-  bool wave2Direction; // True = up, False = down
-  uint8_t waveLength;  // Length of each wave
-  uint8_t hueOffset;   // Color offset between waves
+  uint16_t wave1Position;   // Position of first wave (fixed-point: 0-65535 = 0.0-1.0)
+  uint16_t wave2Position;   // Position of second wave (fixed-point: 0-65535 = 0.0-1.0)
+  bool wave1Direction;      // True = up, False = down
+  bool wave2Direction;      // True = up, False = down
+  uint8_t waveLength;       // Length of each wave
+  uint8_t hueOffset;        // Color offset between waves
+  uint16_t waveSpeed;       // Pre-computed wave speed (fixed-point)
+  uint16_t ledPositionStep; // Pre-computed LED position increment
+  uint16_t waveLengthFixed; // Wave length in fixed-point (for distance comparison)
 
 public:
   PoleBouncePattern(CRGB *leds, int numLeds, CRGB *poleLeds, int poleNumLeds);
   bool update(unsigned long currentTime) override;
   String getName() const override { return "PoleBounce"; }
-  String getDescription() const override { return "Two waves bouncing up and down in opposite directions"; }
+  String getDescription() const override { return "Two bouncing waves (Optimized)"; }
 };
 
 /**
@@ -612,8 +685,8 @@ private:
   static const uint32_t EXPLOSION_DURATION = 267; // Explosion animation time (3x faster)
 
   // Fade-out phase
-  float fadeIntensity;                             // Current fade intensity (1.0 to 0.0)
-  static const uint32_t FADEOUT_DURATION = 2000;  // 2 seconds of fade-out
+  float fadeIntensity;                           // Current fade intensity (1.0 to 0.0)
+  static const uint32_t FADEOUT_DURATION = 2000; // 2 seconds of fade-out
 
   // Helper methods
   void updateLaunchPhase(unsigned long currentTime);

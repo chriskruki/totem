@@ -111,7 +111,7 @@ public:
 class PaletteManager
 {
 private:
-  static const int MAX_PALETTES = 20;
+  static const int MAX_PALETTES = 30; // Increased to accommodate WLED palettes
   ColorPalette *palettes[MAX_PALETTES];
   int paletteCount;
   int currentPaletteIndex;

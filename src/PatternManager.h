@@ -18,7 +18,7 @@
 class PatternManager
 {
 private:
-  static const int MAX_PATTERNS = 15;
+  static const int MAX_PATTERNS = 25; // Increased to accommodate WLED patterns
 
   CRGB *leds;  // Pointer to LED array
   int numLeds; // Number of LEDs

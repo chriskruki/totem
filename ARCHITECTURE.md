@@ -5,27 +5,27 @@
 ### Physical Wiring Order
 
 ```
-Total LEDs: 162
-├─ Clock Ring: Raw indices 0-100 (101 LEDs)
-└─ Eye Rings:  Raw indices 101-161 (61 LEDs)
+Total LEDs: 161
+├─ Clock Ring: Raw indices 0-99 (100 LEDs)
+└─ Eye Rings:  Raw indices 100-160 (61 LEDs)
 ```
 
 ### Raw Index Mapping (Physical Wiring)
 
-- **Clock**: 0-100 → Data flows counter-clockwise from 6 o'clock position
-- **Eye**: 101-161 → Data flows clockwise from 6 o'clock position (outermost ring)
+- **Clock**: 0-99 → Data flows counter-clockwise from 6 o'clock position
+- **Eye**: 100-160 → Data flows clockwise from 6 o'clock position (outermost ring)
 
 ### Logical Index System
 
 All code uses **logical indices** where index 0 = 12 o'clock (top) position.
 
-#### Clock Ring (101 LEDs)
+#### Clock Ring (100 LEDs)
 
 - Direction: Counter-clockwise from 6 o'clock (raw)
-- Logical 0 = 12 o'clock = Raw 51
-- Logical 25 = 3 o'clock = Raw 76
+- Logical 0 = 12 o'clock = Raw 50
+- Logical 25 = 3 o'clock = Raw 25
 - Logical 50 = 6 o'clock = Raw 0
-- Logical 75 = 9 o'clock = Raw 26
+- Logical 75 = 9 o'clock = Raw 75
 
 #### Eye Rings (61 LEDs total)
 
@@ -33,33 +33,33 @@ All rings start at 6 o'clock (raw), go clockwise, logical 0 = 12 o'clock
 
 **EYE_4 (Outermost, 24 LEDs)**
 
-- Raw: 101-124, Local eye indices: 0-23
-- Logical 0 (12 o'clock) = Raw 112 (adjusted -1 for physical alignment)
+- Raw: 100-123, Local eye indices: 0-23
+- Logical 0 (12 o'clock) = Raw 111 (adjusted -1 for physical alignment)
 
 **EYE_3 (16 LEDs)**
 
-- Raw: 125-140, Local eye indices: 24-39
-- Logical 0 (12 o'clock) = Raw 132 (adjusted -1 for physical alignment)
+- Raw: 124-139, Local eye indices: 24-39
+- Logical 0 (12 o'clock) = Raw 131 (adjusted -1 for physical alignment)
 
 **EYE_2 (12 LEDs)**
 
-- Raw: 141-152, Local eye indices: 40-51
-- Logical 0 (12 o'clock) = Raw 146 (adjusted -1 for physical alignment)
+- Raw: 140-151, Local eye indices: 40-51
+- Logical 0 (12 o'clock) = Raw 145 (adjusted -1 for physical alignment)
 
 **EYE_1 (8 LEDs)**
 
-- Raw: 153-160, Local eye indices: 52-59
-- Logical 0 (12 o'clock) = Raw 156 (adjusted -1 for physical alignment)
+- Raw: 152-159, Local eye indices: 52-59
+- Logical 0 (12 o'clock) = Raw 155 (adjusted -1 for physical alignment)
 
 **EYE_0 (Center, 1 LED)**
 
-- Raw: 161, Local eye index: 60
+- Raw: 160, Local eye index: 60
 
 ### Helper Arrays
 
 Pre-computed mapping arrays convert logical indices to raw indices:
 
-- `CLOCK_LED_MAP[101]` - Clock logical→raw mapping
+- `CLOCK_LED_MAP[100]` - Clock logical→raw mapping
 - `EYE_4_LED_MAP[24]` - EYE_4 logical→raw mapping (outermost ring)
 - `EYE_3_LED_MAP[16]` - EYE_3 logical→raw mapping
 - `EYE_2_LED_MAP[12]` - EYE_2 logical→raw mapping
@@ -98,11 +98,11 @@ Position arrays store pre-computed raw LED indices for O(1) access:
 
 ```cpp
 const uint16_t BRIGHTNESS_LED_POSITIONS[9] = {
-    EYE_4_LED_MAP[11],  // Level 0: EYE_4 at 6 o'clock (bottom) - 24/2 - 1
-    EYE_3_LED_MAP[7],   // Level 1: EYE_3 at 6 o'clock - 16/2 - 1
-    EYE_2_LED_MAP[5],   // Level 2: EYE_2 at 6 o'clock - 12/2 - 1
-    EYE_1_LED_MAP[3],   // Level 3: EYE_1 at 6 o'clock - 8/2 - 1
-    EYE_0_RAW_START,    // Level 4: EYE_0 center (raw 161)
+    EYE_4_LED_MAP[12],  // Level 0: EYE_4 at 6 o'clock (bottom) - 24/2 - 1
+    EYE_3_LED_MAP[8],   // Level 1: EYE_3 at 6 o'clock - 16/2 - 1
+    EYE_2_LED_MAP[6],   // Level 2: EYE_2 at 6 o'clock - 12/2 - 1
+    EYE_1_LED_MAP[4],   // Level 3: EYE_1 at 6 o'clock - 8/2 - 1
+    EYE_0_RAW_START,    // Level 4: EYE_0 center (raw 160)
     EYE_1_LED_MAP[0],   // Level 5: EYE_1 at 12 o'clock (top)
     EYE_2_LED_MAP[0],   // Level 6: EYE_2 at 12 o'clock
     EYE_3_LED_MAP[0],   // Level 7: EYE_3 at 12 o'clock
@@ -114,14 +114,14 @@ const uint16_t BRIGHTNESS_LED_POSITIONS[9] = {
 
 ```cpp
 const uint16_t SPEED_LED_POSITIONS[9] = {
-    EYE_4_LED_MAP[17],  // Level 0: EYE_4 at 9 o'clock (left) - 3*24/4 - 1
-    EYE_3_LED_MAP[11],  // Level 1: EYE_3 at 9 o'clock - 3*16/4 - 1
-    EYE_2_LED_MAP[8],   // Level 2: EYE_2 at 9 o'clock - 3*12/4 - 1
-    EYE_1_LED_MAP[5],   // Level 3: EYE_1 at 9 o'clock - 3*8/4 - 1
-    EYE_0_RAW_START,    // Level 4: EYE_0 center (raw 161)
-    EYE_1_LED_MAP[1],   // Level 5: EYE_1 at 3 o'clock (right) - 8/4 - 1
-    EYE_2_LED_MAP[2],   // Level 6: EYE_2 at 3 o'clock - 12/4 - 1
-    EYE_3_LED_MAP[3],   // Level 7: EYE_3 at 3 o'clock - 16/4 - 1
+    EYE_4_LED_MAP[18],  // Level 0: EYE_4 at 9 o'clock (left) - 3*24/4 - 1
+    EYE_3_LED_MAP[12],  // Level 1: EYE_3 at 9 o'clock - 3*16/4 - 1
+    EYE_2_LED_MAP[9],   // Level 2: EYE_2 at 9 o'clock - 3*12/4 - 1
+    EYE_1_LED_MAP[6],   // Level 3: EYE_1 at 9 o'clock - 3*8/4 - 1
+    EYE_0_RAW_START,    // Level 4: EYE_0 center (raw 160)
+    EYE_1_LED_MAP[2],   // Level 5: EYE_1 at 3 o'clock (right) - 8/4 - 1
+    EYE_2_LED_MAP[3],   // Level 6: EYE_2 at 3 o'clock - 12/4 - 1
+    EYE_3_LED_MAP[4],   // Level 7: EYE_3 at 3 o'clock - 16/4 - 1
     EYE_4_LED_MAP[5]    // Level 8: EYE_4 at 3 o'clock - 24/4 - 1
 };
 ```

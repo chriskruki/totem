@@ -8,7 +8,7 @@
 Pattern::Pattern(CRGB *leds, int numLeds, unsigned long updateInterval)
     : leds(leds), numLeds(numLeds), updateInterval(updateInterval),
       lastUpdate(0), isActive(true), currentPalette(nullptr),
-      brightness(255), speed(DEFAULT_GLOBAL_SPEED)
+      brightness(255), speed(DEFAULT_GLOBAL_SPEED), speedNormalizationFactor(1.0f)
 {
 }
 
@@ -111,12 +111,17 @@ bool RainbowPattern::update(unsigned long currentTime)
 
   lastUpdate = currentTime;
 
-  fill_rainbow(leds, numLeds, hue, deltaHue);
-
-  // Apply brightness scaling
-  for (int i = 0; i < numLeds; i++)
+  // Apply rainbow using logical indices
+  for (int logicalIndex = 0; logicalIndex < numLeds; logicalIndex++)
   {
-    leds[i].nscale8(brightness);
+    // Calculate hue for this logical position
+    uint8_t pixelHue = hue + (logicalIndex * deltaHue);
+
+    // Convert logical index to raw index
+    uint16_t rawIndex = logicalToRawIndex(logicalIndex);
+
+    // Set color at raw index
+    leds[rawIndex] = CHSV(pixelHue, 255, brightness);
   }
 
   hue += 1;
@@ -148,21 +153,25 @@ bool ChasePattern::update(unsigned long currentTime)
     leds[i].fadeToBlackBy(60);
   }
 
-  // Draw the chase dot and trail
+  // Draw the chase dot and trail (using logical indices)
   for (int i = 0; i < trailLength; i++)
   {
-    int ledIndex = position - i;
-    if (ledIndex < 0)
-      ledIndex += numLeds;
-    if (ledIndex >= numLeds)
-      ledIndex -= numLeds;
+    // Calculate logical index (0-160, where 0 = 12 o'clock)
+    int logicalIndex = position - i;
+    if (logicalIndex < 0)
+      logicalIndex += numLeds;
+    if (logicalIndex >= numLeds)
+      logicalIndex -= numLeds;
+
+    // Convert logical index to raw index using LED mapping
+    uint16_t rawIndex = logicalToRawIndex(logicalIndex);
 
     // Get color from palette based on position, or use default color
     CRGB trailColor;
     if (currentPalette)
     {
-      // Sample palette based on position for color variation
-      uint8_t paletteIndex = map(ledIndex, 0, numLeds - 1, 0, 255);
+      // Sample palette based on logical position for color variation
+      uint8_t paletteIndex = map(logicalIndex, 0, numLeds - 1, 0, 255);
       trailColor = currentPalette->getColor(paletteIndex);
     }
     else
@@ -173,10 +182,11 @@ bool ChasePattern::update(unsigned long currentTime)
     uint8_t brightness_scale = map(i, 0, trailLength - 1, brightness, brightness / 4);
     trailColor.nscale8(brightness_scale);
 
-    leds[ledIndex] = trailColor;
+    // Set LED at raw index (physical position)
+    leds[rawIndex] = trailColor;
   }
 
-  // Move position
+  // Move position (in logical space)
   position += direction;
   if (position >= numLeds)
   {
@@ -198,6 +208,131 @@ void ChasePattern::setChaseColor(CRGB color)
 void ChasePattern::setTrailLength(uint8_t length)
 {
   trailLength = constrain(length, 1, numLeds / 2);
+}
+
+// ============================================================================
+// Synchronized Chase Pattern Implementation
+// ============================================================================
+
+/**
+ * @brief Constructor for SynchronizedChasePattern
+ *
+ * Creates a chase pattern that synchronizes across multiple segments by angular position.
+ * Example: Chase at 12 o'clock appears at the top of all selected rings simultaneously.
+ */
+SynchronizedChasePattern::SynchronizedChasePattern(CRGB *leds, int numLeds,
+                                                   SegmentManager *segManager,
+                                                   const uint8_t *segments,
+                                                   uint8_t numSegments,
+                                                   uint8_t trailWidth)
+    : Pattern(leds, numLeds, 40), segmentManager(segManager), currentAngle(0.0f),
+      angularSpeed(5.0f), trailWidth(trailWidth), numTargetSegments(0), palette(nullptr)
+{
+  setTargetSegments(segments, numSegments);
+}
+
+bool SynchronizedChasePattern::update(unsigned long currentTime)
+{
+  if (!isActive || !segmentManager || (currentTime - lastUpdate) < updateInterval)
+  {
+    return false;
+  }
+
+  lastUpdate = currentTime;
+
+  // Clear all LEDs
+  fill_solid(leds, numLeds, CRGB::Black);
+
+  // Apply effective speed (respects speedNormalizationFactor)
+  float effectiveAngularSpeed = angularSpeed * getEffectiveSpeed();
+
+  // Update angle position
+  currentAngle += effectiveAngularSpeed;
+  if (currentAngle >= 360.0f)
+  {
+    currentAngle -= 360.0f;
+  }
+
+  // Buffer to hold raw LED indices (max possible: ~20 LEDs across all segments)
+  uint16_t rawIndices[30];
+
+  // Get raw LED indices at current angle across all target segments
+  uint8_t numLEDs = segmentManager->getRawLEDsAtAngleMulti(
+      targetSegments, numTargetSegments, currentAngle, trailWidth, rawIndices, 30);
+
+  // Light up all LEDs at this angle
+  for (uint8_t i = 0; i < numLEDs; i++)
+  {
+    uint16_t rawIndex = rawIndices[i];
+    if (rawIndex < (uint16_t)numLeds)
+    {
+      // Get color from palette based on angle, or use white
+      CRGB color;
+      if (currentPalette)
+      {
+        uint8_t paletteIndex = (uint8_t)((currentAngle / 360.0f) * 255.0f);
+        color = currentPalette->getColor(paletteIndex);
+      }
+      else
+      {
+        color = CRGB::White;
+      }
+
+      // Apply brightness
+      color.nscale8(brightness);
+
+      leds[rawIndex] = color;
+    }
+  }
+
+  // Add fading trail effect
+  uint8_t numTrailSteps = 3; // Number of trailing positions
+  for (uint8_t t = 1; t <= numTrailSteps; t++)
+  {
+    float trailAngle = currentAngle - (effectiveAngularSpeed * t);
+    while (trailAngle < 0.0f)
+      trailAngle += 360.0f;
+
+    numLEDs = segmentManager->getRawLEDsAtAngleMulti(
+        targetSegments, numTargetSegments, trailAngle, trailWidth, rawIndices, 30);
+
+    uint8_t trailBrightness = brightness / (t + 1); // Fade based on distance
+
+    for (uint8_t i = 0; i < numLEDs; i++)
+    {
+      uint16_t rawIndex = rawIndices[i];
+      if (rawIndex < (uint16_t)numLeds)
+      {
+        CRGB color;
+        if (currentPalette)
+        {
+          uint8_t paletteIndex = (uint8_t)((trailAngle / 360.0f) * 255.0f);
+          color = currentPalette->getColor(paletteIndex);
+        }
+        else
+        {
+          color = CRGB::White;
+        }
+
+        color.nscale8(trailBrightness);
+
+        // Blend with existing color (for overlapping trails)
+        leds[rawIndex] += color;
+      }
+    }
+  }
+
+  return true;
+}
+
+void SynchronizedChasePattern::setTargetSegments(const uint8_t *segments, uint8_t numSegments)
+{
+  // Copy segment types to internal array (max 6 segments)
+  numTargetSegments = min(numSegments, (uint8_t)6);
+  for (uint8_t i = 0; i < numTargetSegments; i++)
+  {
+    targetSegments[i] = segments[i];
+  }
 }
 
 // ============================================================================
@@ -426,18 +561,18 @@ bool WavePattern::update(unsigned long currentTime)
   // Clear all LEDs
   fill_solid(leds, numLeds, CRGB::Black);
 
-  // Draw sine wave
-  for (int i = 0; i < numLeds; i++)
+  // Draw sine wave using logical indices
+  for (int logicalIndex = 0; logicalIndex < numLeds; logicalIndex++)
   {
-    float angle = (float)(i + wavePosition) * 2.0 * PI / waveLength;
+    float angle = (float)(logicalIndex + wavePosition) * 2.0 * PI / waveLength;
     uint8_t intensity = (uint8_t)((sin(angle) + 1.0) * 127.5);
 
-    // Get color from palette based on position, or use default color
+    // Get color from palette based on logical position, or use default color
     CRGB scaledColor;
     if (currentPalette)
     {
-      // Sample palette based on position for color variation
-      uint8_t paletteIndex = map(i, 0, numLeds - 1, 0, 255);
+      // Sample palette based on logical position for color variation
+      uint8_t paletteIndex = map(logicalIndex, 0, numLeds - 1, 0, 255);
       scaledColor = currentPalette->getColor(paletteIndex);
     }
     else
@@ -446,7 +581,10 @@ bool WavePattern::update(unsigned long currentTime)
     }
 
     scaledColor.nscale8(map(intensity, 0, 255, 0, brightness));
-    leds[i] = scaledColor;
+
+    // Convert logical index to raw index and set LED
+    uint16_t rawIndex = logicalToRawIndex(logicalIndex);
+    leds[rawIndex] = scaledColor;
   }
 
   wavePosition++;
@@ -611,11 +749,13 @@ void SpiralPattern::setSpiralWidth(uint8_t width)
 // ============================================================================
 
 RipplePattern::RipplePattern(CRGB *leds, int numLeds, SegmentManager *segManager, unsigned long interval)
-    : Pattern(leds, numLeds, 50), segmentManager(segManager), currentRingPosition(0.0f),
-      bouncingOutward(true), bounceSpeed(0.02f), ringIntensity(255), lastUpdate(0)
+    : Pattern(leds, numLeds, 50), segmentManager(segManager), currentRingPosition(0),
+      bouncingOutward(true), bounceSpeed(1310), ringIntensity(255), lastUpdate(0)
 {
   // Start at the innermost ring (EYE_0)
-  currentRingPosition = 0.0f;
+  // Fixed-point: 0-32768 represents 0.0-5.0 rings (6554 per ring)
+  // bounceSpeed: 0.02 * 65535 ≈ 1310
+  currentRingPosition = 0;
 }
 
 bool RipplePattern::update(unsigned long currentTime)
@@ -635,42 +775,52 @@ bool RipplePattern::update(unsigned long currentTime)
     return true;
   }
 
-  // Update bounce position based on speed
-  float adjustedSpeed = bounceSpeed * speed; // Apply global speed multiplier
+  // Calculate adjusted speed (fixed-point)
+  uint16_t adjustedSpeed = (uint16_t)(bounceSpeed * speed);
 
   if (bouncingOutward)
   {
-    currentRingPosition += adjustedSpeed;
-    // Check if we've reached the outermost ring (including clock)
-    if (currentRingPosition >= 5.0f) // 5 eye rings + clock = 6 total, so max position is 5
+    if (currentRingPosition <= (32768 - adjustedSpeed))
     {
-      currentRingPosition = 5.0f;
-      bouncingOutward = false; // Start bouncing inward
+      currentRingPosition += adjustedSpeed;
+    }
+    else
+    {
+      currentRingPosition = 32768; // Max = 5.0 rings (32768 = 5 * 6554)
+      bouncingOutward = false;     // Start bouncing inward
     }
   }
   else
   {
-    currentRingPosition -= adjustedSpeed;
-    // Check if we've reached the innermost ring (EYE_0)
-    if (currentRingPosition <= 0.0f)
+    if (currentRingPosition >= adjustedSpeed)
     {
-      currentRingPosition = 0.0f;
+      currentRingPosition -= adjustedSpeed;
+    }
+    else
+    {
+      currentRingPosition = 0;
       bouncingOutward = true; // Start bouncing outward
     }
   }
 
-  // Determine which ring to light up
-  uint8_t activeRing = (uint8_t)round(currentRingPosition);
+  // Determine which eye ring to light up (integer division)
+  // activeRing: 0 = EYE_0 (center), 1 = EYE_1, 2 = EYE_2, 3 = EYE_3, 4 = EYE_4
+  uint8_t activeRing = currentRingPosition / 6554; // 6554 = 32768 / 5 rings
 
   // Get color from palette based on ring position
-  float colorPos = currentRingPosition / 5.0f; // Normalize to 0.0-1.0
-  CRGB ringColor = currentPalette->getColorSmooth(colorPos);
+  // Convert fixed-point to palette index (0-255)
+  uint8_t colorPos = (currentRingPosition * 255) / 32768; // Normalize to 0-255
+  CRGB ringColor = currentPalette->getColor(colorPos);
   ringColor.nscale8(brightness);
 
-  // Light up the active ring
-  if (activeRing < segmentManager->getSegmentCount())
+  // Light up the active eye ring
+  // Map activeRing (0-4) to segment types (SEGMENT_EYE_0 to SEGMENT_EYE_4)
+  // activeRing 0 → SEGMENT_EYE_0 (5), activeRing 4 → SEGMENT_EYE_4 (1)
+  uint8_t segmentType = SEGMENT_EYE_0 - activeRing;
+
+  if (segmentType >= SEGMENT_EYE_4 && segmentType <= SEGMENT_EYE_0)
   {
-    segmentManager->fillSegment(leds, activeRing, ringColor);
+    segmentManager->fillSegment(leds, segmentType, ringColor);
   }
 
   return true;
@@ -678,7 +828,8 @@ bool RipplePattern::update(unsigned long currentTime)
 
 void RipplePattern::setBounceSpeed(float speed)
 {
-  bounceSpeed = constrain(speed, 0.01f, 0.1f); // Reasonable speed range
+  // Convert float speed to fixed-point (0.01-0.1 → 655-6554)
+  bounceSpeed = (uint16_t)constrain(speed * 65535, 655, 6554);
 }
 
 // ============================================================================
@@ -1002,12 +1153,12 @@ bool PoleSpiralChasePattern::update(unsigned long currentTime)
   return true;
 }
 
-// PoleHelixPattern implementation
+// PoleHelixPattern implementation (OPTIMIZED)
 PoleHelixPattern::PoleHelixPattern(CRGB *leds, int numLeds, CRGB *poleLeds, int poleNumLeds)
     : PolePattern(leds, numLeds, poleLeds, poleNumLeds, 40),
-      helixPhase(0.0f),
+      helixPhase(0), // Fixed-point: 0-65535 represents 0-2π
       numHelixes(3),
-      helixSpeed(0.1f)
+      helixSpeed(6554) // 0.1 * 65535 ≈ 6554 (10% speed)
 {
 }
 
@@ -1021,45 +1172,52 @@ bool PoleHelixPattern::update(unsigned long currentTime)
   // Clear pole LEDs
   fill_solid(poleLeds, poleNumLeds, CRGB::Black);
 
-  // Update helix phase
-  helixPhase += speed * helixSpeed;
-  if (helixPhase >= 2.0f * PI)
-  {
-    helixPhase -= 2.0f * PI;
-  }
+  // Update helix phase (fixed-point, auto-wraps at 65536)
+  helixPhase += (uint16_t)(speed * helixSpeed);
+  // No need to wrap - uint16_t overflow IS the wrap!
 
   // Create multiple helixes
   for (uint8_t helix = 0; helix < numHelixes; helix++)
   {
-    float helixOffset = (2.0f * PI * helix) / numHelixes;
+    // Helix offset in fixed-point (divide full range by numHelixes)
+    uint16_t helixOffset = (65535 / numHelixes) * helix;
 
     for (uint16_t i = 0; i < poleNumLeds; i++)
     {
       uint8_t height = getPoleHeight(i);
       uint8_t column = getPoleColumn(i);
 
-      // Calculate helix position
-      float helixPos = helixPhase + helixOffset + (height * 0.3f);
-      float expectedColumn = (sin(helixPos) + 1.0f) * (POLE_SPIRAL_REPEAT / 2.0f);
+      // Calculate helix position (fixed-point)
+      // height * 0.3 ≈ height * 328 (in 16-bit fixed-point where 1024 = 0.3 * 65535/20)
+      uint16_t helixPos16 = helixPhase + helixOffset + (height * 328);
 
-      // Check if this LED is close to the helix path
-      float columnDistance = abs(column - expectedColumn);
-      if (columnDistance > POLE_SPIRAL_REPEAT / 2)
+      // Use FastLED's sin16() - 10-20x faster than sin()!
+      int16_t sinValue = sin16(helixPos16); // Returns -32768 to +32767
+
+      // Map to column range: (sin + 32768) * POLE_SPIRAL_REPEAT / 65536
+      uint8_t expectedColumn = ((uint32_t)(sinValue + 32768) * POLE_SPIRAL_REPEAT) >> 16;
+
+      // Check if this LED is close to the helix path (integer math)
+      int8_t columnDistance = abs((int8_t)column - (int8_t)expectedColumn);
+      if (columnDistance > (int8_t)(POLE_SPIRAL_REPEAT / 2))
       {
         columnDistance = POLE_SPIRAL_REPEAT - columnDistance; // Wrap around
       }
 
-      if (columnDistance <= 1.5f)
+      if (columnDistance <= 1) // Threshold of 1.5 → 1 (close enough)
       {
-        // Calculate intensity based on distance from helix center
-        float intensity = 1.0f - (columnDistance / 1.5f);
+        // Calculate intensity based on distance (0-255 range)
+        uint8_t intensity = 255 - (columnDistance * 170); // 170 = 255/1.5
 
-        // Use palette color based on helix and height
-        float palettePosition = ((float)helix / (float)numHelixes + (float)height / POLE_HEIGHT_LEVELS + currentTime / 10000.0f);
-        palettePosition = fmod(palettePosition, 1.0f); // Wrap to 0.0-1.0
+        // Palette position calculation (no fmod needed - uint8_t wraps!)
+        uint8_t palettePos = (helix * 85) + (height * 2) + (currentTime >> 12);
+        // 85 = 255/3 (divides palette into thirds for 3 helixes)
+        // >> 12 approximates / 4096 (close to / 10000)
 
-        CRGB rgbColor = getPaletteColor(palettePosition);
-        rgbColor.nscale8((uint8_t)(intensity * brightness));
+        CRGB rgbColor = getPaletteColor(palettePos / 255.0f);
+
+        // Use scale8() for fast brightness scaling
+        rgbColor.nscale8(scale8(intensity, brightness));
 
         poleLeds[i] = rgbColor;
       }
@@ -1126,16 +1284,25 @@ bool PoleFirePattern::update(unsigned long currentTime)
   return true;
 }
 
-// PoleBouncePattern implementation
+// PoleBouncePattern implementation (OPTIMIZED)
 PoleBouncePattern::PoleBouncePattern(CRGB *leds, int numLeds, CRGB *poleLeds, int poleNumLeds)
     : PolePattern(leds, numLeds, poleLeds, poleNumLeds, 40),
-      wave1Position(0.0f),
-      wave2Position(0.5f),   // Start second wave at middle
+      wave1Position(0),      // Fixed-point: 0 = start
+      wave2Position(32768),  // Fixed-point: 32768 = middle (0.5 * 65535)
       wave1Direction(true),  // Wave 1 starts going up
       wave2Direction(false), // Wave 2 starts going down
       waveLength(30),
-      hueOffset(128) // 180 degrees apart in hue
+      hueOffset(128),     // 180 degrees apart in hue
+      waveSpeed(655),     // 0.01 * 65535 ≈ 655
+      ledPositionStep(0), // Will be calculated
+      waveLengthFixed(0)  // Will be calculated
 {
+  // Pre-compute constants (one-time calculation)
+  if (poleNumLeds > 1)
+  {
+    ledPositionStep = 65535 / (poleNumLeds - 1); // ONE division for entire pattern lifetime!
+    waveLengthFixed = ((uint32_t)waveLength * 65535) / poleNumLeds;
+  }
 }
 
 bool PoleBouncePattern::update(unsigned long currentTime)
@@ -1148,25 +1315,31 @@ bool PoleBouncePattern::update(unsigned long currentTime)
   // Clear pole LEDs
   fill_solid(poleLeds, poleNumLeds, CRGB::Black);
 
-  // Update wave positions
-  float waveSpeed = speed * 0.01f; // Adjust speed scaling
+  // Calculate wave speed (fixed-point)
+  uint16_t currentWaveSpeed = (uint16_t)(speed * waveSpeed);
 
-  // Update wave 1
+  // Update wave 1 (integer math)
   if (wave1Direction) // Going up
   {
-    wave1Position += waveSpeed;
-    if (wave1Position >= 1.0f)
+    if (wave1Position <= (65535 - currentWaveSpeed))
     {
-      wave1Position = 1.0f;
+      wave1Position += currentWaveSpeed;
+    }
+    else
+    {
+      wave1Position = 65535;
       wave1Direction = false; // Bounce down
     }
   }
   else // Going down
   {
-    wave1Position -= waveSpeed;
-    if (wave1Position <= 0.0f)
+    if (wave1Position >= currentWaveSpeed)
     {
-      wave1Position = 0.0f;
+      wave1Position -= currentWaveSpeed;
+    }
+    else
+    {
+      wave1Position = 0;
       wave1Direction = true; // Bounce up
     }
   }
@@ -1174,57 +1347,66 @@ bool PoleBouncePattern::update(unsigned long currentTime)
   // Update wave 2 (opposite direction)
   if (wave2Direction) // Going up
   {
-    wave2Position += waveSpeed;
-    if (wave2Position >= 1.0f)
+    if (wave2Position <= (65535 - currentWaveSpeed))
     {
-      wave2Position = 1.0f;
+      wave2Position += currentWaveSpeed;
+    }
+    else
+    {
+      wave2Position = 65535;
       wave2Direction = false; // Bounce down
     }
   }
   else // Going down
   {
-    wave2Position -= waveSpeed;
-    if (wave2Position <= 0.0f)
+    if (wave2Position >= currentWaveSpeed)
     {
-      wave2Position = 0.0f;
+      wave2Position -= currentWaveSpeed;
+    }
+    else
+    {
+      wave2Position = 0;
       wave2Direction = true; // Bounce up
     }
   }
 
-  // Render both waves
+  // Render both waves (OPTIMIZED - no float math, no divisions!)
+  uint16_t ledPosition = 0;
+  uint8_t timeOffset = currentTime >> 12; // Approximates / 4096 (close to / 5000)
+
   for (int i = 0; i < poleNumLeds; i++)
   {
-    float ledPosition = (float)i / (float)(poleNumLeds - 1); // 0.0 to 1.0
-
     CRGB finalColor = CRGB::Black;
 
-    // Calculate wave 1 contribution
-    float wave1Distance = abs(ledPosition - wave1Position);
-    if (wave1Distance <= (float)waveLength / (float)poleNumLeds)
+    // Calculate wave 1 contribution (integer math)
+    int32_t wave1Distance = abs((int32_t)ledPosition - (int32_t)wave1Position);
+    if (wave1Distance <= waveLengthFixed)
     {
-      float wave1Intensity = 1.0f - (wave1Distance / ((float)waveLength / (float)poleNumLeds));
-      float wave1PalettePos = (ledPosition + currentTime / 5000.0f);
-      wave1PalettePos = fmod(wave1PalettePos, 1.0f);
+      // Integer intensity calculation (0-255)
+      uint8_t wave1Intensity = 255 - ((wave1Distance * 255) / waveLengthFixed);
 
-      CRGB wave1Color = getPaletteColor(wave1PalettePos);
-      wave1Color.nscale8((uint8_t)(wave1Intensity * brightness));
+      // Palette position (wraps automatically with uint8_t - no fmod!)
+      uint8_t wave1PalettePos = (ledPosition >> 8) + timeOffset;
+
+      CRGB wave1Color = getPaletteColor(wave1PalettePos / 255.0f);
+      wave1Color.nscale8(scale8(wave1Intensity, brightness));
       finalColor += wave1Color;
     }
 
-    // Calculate wave 2 contribution
-    float wave2Distance = abs(ledPosition - wave2Position);
-    if (wave2Distance <= (float)waveLength / (float)poleNumLeds)
+    // Calculate wave 2 contribution (same optimization)
+    int32_t wave2Distance = abs((int32_t)ledPosition - (int32_t)wave2Position);
+    if (wave2Distance <= waveLengthFixed)
     {
-      float wave2Intensity = 1.0f - (wave2Distance / ((float)waveLength / (float)poleNumLeds));
-      float wave2PalettePos = (ledPosition + hueOffset / 255.0f + currentTime / 5000.0f);
-      wave2PalettePos = fmod(wave2PalettePos, 1.0f);
+      uint8_t wave2Intensity = 255 - ((wave2Distance * 255) / waveLengthFixed);
+      uint8_t wave2PalettePos = (ledPosition >> 8) + hueOffset + timeOffset;
 
-      CRGB wave2Color = getPaletteColor(wave2PalettePos);
-      wave2Color.nscale8((uint8_t)(wave2Intensity * brightness));
+      CRGB wave2Color = getPaletteColor(wave2PalettePos / 255.0f);
+      wave2Color.nscale8(scale8(wave2Intensity, brightness));
       finalColor += wave2Color;
     }
 
     poleLeds[i] = finalColor;
+    ledPosition += ledPositionStep; // Integer increment - 30x faster than division!
   }
 
   lastUpdate = currentTime;

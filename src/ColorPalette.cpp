@@ -1,4 +1,5 @@
 #include "ColorPalette.h"
+#include "WLEDPalettes.h"
 
 // ============================================================================
 // ColorPalette Implementation
@@ -116,6 +117,16 @@ void PaletteManager::initialize()
   // addPalette(new ColorPalette(PredefinedPalettes::FIRE_COLORS, 4, "Fire", "Flickering fire"));
   // addPalette(new ColorPalette(PredefinedPalettes::OCEAN_COLORS, 4, "Deep Ocean", "Deep ocean blues"));
   // addPalette(new ColorPalette(PredefinedPalettes::FOREST_COLORS, 4, "Forest Green", "Various greens"));
+
+  // Add WLED gradient palettes
+  for (int i = 0; i < WLEDPalettes::WLED_PALETTE_COUNT; i++)
+  {
+    CRGBPalette16 wledPalette = WLEDPalettes::WLED_PALETTES[i].palette;
+    addPalette(new ColorPalette(
+        wledPalette,
+        String(WLEDPalettes::WLED_PALETTES[i].name),
+        String(WLEDPalettes::WLED_PALETTES[i].description)));
+  }
 
   Serial.print("Loaded ");
   Serial.print(paletteCount);

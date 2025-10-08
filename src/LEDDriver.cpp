@@ -13,8 +13,8 @@ LEDDriver::LEDDriver() : brightness(DEFAULT_BRIGHTNESS),
                          patternManager(nullptr),
                          globalBrightness(DEFAULT_GLOBAL_BRIGHTNESS),
                          globalSpeed(DEFAULT_GLOBAL_SPEED),
-                         selectedPatternIndex(6), // Wave pattern (index 6)
-                         selectedPaletteIndex(1), // Ocean palette (index 1)
+                         selectedPatternIndex(4), // Wave pattern (index 4)
+                         selectedPaletteIndex(4), // Party palette (index 4)
                          poleBrightness(DEFAULT_POLE_BRIGHTNESS),
                          poleSpeed(DEFAULT_POLE_SPEED),
                          selectedPolePatternIndex(1), // Spiral Chase pattern (default)

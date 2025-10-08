@@ -1,4 +1,5 @@
 #include "PatternManager.h"
+#include "WLEDPatterns.h"
 
 // ============================================================================
 // PatternManager Implementation
@@ -52,6 +53,16 @@ void PatternManager::initialize()
     // addPattern(new EyeBreathingPattern(leds, numLeds, segmentManager));
     // addPattern(new SegmentTestPattern(leds, numLeds, segmentManager, SEGMENT_TEST_INTERVAL));
   }
+
+  // Add WLED patterns
+  addPattern(new WLEDDancingShadowsPattern(leds, numLeds));
+  addPattern(new WLEDColorWavesPattern(leds, numLeds));
+  addPattern(new WLEDNoisePattern(leds, numLeds));
+  addPattern(new WLEDMeteorPattern(leds, numLeds));
+  addPattern(new WLEDGlitterPattern(leds, numLeds));
+  addPattern(new WLEDTwoDotsPattern(leds, numLeds));
+  addPattern(new WLEDColortwinklesPattern(leds, numLeds));
+  addPattern(new WLEDFlowPattern(leds, numLeds));
 
   // Set initial palette for all patterns
   ColorPalette *defaultPalette = paletteManager.getCurrentPalette();
