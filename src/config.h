@@ -229,10 +229,11 @@ const uint16_t SPEED_LED_POSITIONS[SPEED_PREVIEW_LEDS] = {
 #define NUM_EXPLORER_SUBMODES 4           // Number of explorer sub-modes
 
 // Interaction Mode Sub-Modes (Main Mode 1)
-#define INTERACTION_SUBMODE_EYEBALL 0  // Eyeball tracking mode
-#define INTERACTION_SUBMODE_FIREWORK 1 // Firework launch mode
-#define INTERACTION_SUBMODE_JOLT 2     // Jolt magnitude mode
-#define NUM_INTERACTION_SUBMODES 3     // Number of interaction sub-modes
+#define INTERACTION_SUBMODE_EYEBALL 0    // Eyeball tracking mode
+#define INTERACTION_SUBMODE_FIREWORK 1   // Firework launch mode
+#define INTERACTION_SUBMODE_JOLT 2       // Jolt magnitude mode
+#define INTERACTION_SUBMODE_SPEED_CTRL 3 // Speed control mode
+#define NUM_INTERACTION_SUBMODES 4       // Number of interaction sub-modes
 
 // Special Modes (not in normal cycle)
 #define SPECIAL_MODE_SETTINGS 99    // Settings mode - quadrant-based interface
@@ -310,5 +311,9 @@ extern uint8_t currentSubMode;
 #define SETTINGS_TICK_COLOR CRGB::Red       // Color for selection ticks
 #define SETTINGS_POINTER_FLASH_MIN 10       // Minimum brightness during flash
 #define SETTINGS_POINTER_FLASH_MAX 100      // Maximum brightness during flash
+
+#define SPEED_CONTROL_DEADZONE_SPEED 0.4f // Speed control deadzone speed
+#define SPEED_CONTROL_MIN_SPEED 0.4f      // Minimum speed control speed
+#define SPEED_CONTROL_MAX_SPEED 5.0f      // Maximum speed control speed
 
 #endif // CONFIG_H

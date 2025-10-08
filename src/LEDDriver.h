@@ -6,6 +6,7 @@
 #include "PatternManager.h"
 #include "SegmentManager.h"
 #include "EyeRenderer.h"
+#include "PolePatternConfig.h"
 
 /**
  * @brief Custom LED Driver class for ESP32 with FastLED
@@ -34,6 +35,9 @@ private:
 
   // Pattern manager for advanced patterns
   PatternManager *patternManager;
+
+  // Pole pattern manager
+  PolePatternManager *polePatternManager;
 
   // Global settings state (for clock/eye)
   uint8_t globalBrightness;
@@ -133,6 +137,7 @@ private:
   void processEyeballMode();
   void processFireworkMode();
   void processJoltMode();
+  void processSpeedControlMode();
 
   // Special mode methods
   void processSettingsMode();

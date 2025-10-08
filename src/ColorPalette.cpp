@@ -113,20 +113,20 @@ void PaletteManager::initialize()
   addPalette(new ColorPalette(PredefinedPalettes::WARM_COLORS, 4, "Warm", "Warm sunset colors"));
   addPalette(new ColorPalette(PredefinedPalettes::SUNSET_COLORS, 4, "Sunset", "Beautiful sunset"));
   addPalette(new ColorPalette(PredefinedPalettes::NEON_COLORS, 4, "Neon", "Bright neon colors"));
-  // addPalette(new ColorPalette(PredefinedPalettes::PASTEL_COLORS, 4, "Pastel", "Soft pastel colors"));
+  addPalette(new ColorPalette(PredefinedPalettes::PASTEL_COLORS, 4, "Pastel", "Soft pastel colors"));
   // addPalette(new ColorPalette(PredefinedPalettes::FIRE_COLORS, 4, "Fire", "Flickering fire"));
   // addPalette(new ColorPalette(PredefinedPalettes::OCEAN_COLORS, 4, "Deep Ocean", "Deep ocean blues"));
   // addPalette(new ColorPalette(PredefinedPalettes::FOREST_COLORS, 4, "Forest Green", "Various greens"));
 
-  // Add WLED gradient palettes
-  for (int i = 0; i < WLEDPalettes::WLED_PALETTE_COUNT; i++)
-  {
-    CRGBPalette16 wledPalette = WLEDPalettes::WLED_PALETTES[i].palette;
-    addPalette(new ColorPalette(
-        wledPalette,
-        String(WLEDPalettes::WLED_PALETTES[i].name),
-        String(WLEDPalettes::WLED_PALETTES[i].description)));
-  }
+  // Add WLED gradient palettes (COMMENTED OUT to reduce overhead - can re-enable later)
+  // for (int i = 0; i < WLEDPalettes::WLED_PALETTE_COUNT; i++)
+  // {
+  //   CRGBPalette16 wledPalette = WLEDPalettes::WLED_PALETTES[i].palette;
+  //   addPalette(new ColorPalette(
+  //       wledPalette,
+  //       String(WLEDPalettes::WLED_PALETTES[i].name),
+  //       String(WLEDPalettes::WLED_PALETTES[i].description)));
+  // }
 
   Serial.print("Loaded ");
   Serial.print(paletteCount);
@@ -289,9 +289,9 @@ namespace PredefinedPalettes
       CRGB::Lime};
 
   const CRGB PASTEL_COLORS[] = {
-      CRGB(255, 182, 193), // Light Pink
-      CRGB(173, 216, 230), // Light Blue
-      CRGB(144, 238, 144), // Light Green
-      CRGB(255, 218, 185)  // Peach
-  };
+      CRGB::HotPink,
+      CRGB::BlueViolet,
+      CRGB::Purple,
+      CRGB::DeepPink1,
+      CRGB::VioletRed};
 }

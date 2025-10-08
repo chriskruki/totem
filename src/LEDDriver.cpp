@@ -11,13 +11,14 @@ LEDDriver::LEDDriver() : brightness(DEFAULT_BRIGHTNESS),
                          blinkState(false),
                          lastBlinkTime(0),
                          patternManager(nullptr),
+                         polePatternManager(nullptr),
                          globalBrightness(DEFAULT_GLOBAL_BRIGHTNESS),
                          globalSpeed(DEFAULT_GLOBAL_SPEED),
                          selectedPatternIndex(4), // Wave pattern (index 4)
                          selectedPaletteIndex(4), // Party palette (index 4)
                          poleBrightness(DEFAULT_POLE_BRIGHTNESS),
                          poleSpeed(DEFAULT_POLE_SPEED),
-                         selectedPolePatternIndex(1), // Spiral Chase pattern (default)
+                         selectedPolePatternIndex(4), // Bounce pattern (default)
                          selectedPolePaletteIndex(0), // First pole palette
                          selectedJoltPaletteIndex(0), // First palette for jolt mode
                          currentMainMode(MAIN_MODE_EXPLORER),
@@ -71,6 +72,9 @@ LEDDriver::~LEDDriver()
   // Clean up pattern manager
   delete patternManager;
 
+  // Clean up pole pattern manager
+  delete polePatternManager;
+
   // Clean up eye renderer
   delete eyeRenderer;
 }
@@ -109,6 +113,17 @@ bool LEDDriver::initialize()
   // Initialize pattern manager
   patternManager = new PatternManager(leds, NUM_LEDS, &segmentManager);
   patternManager->initialize();
+
+  // Initialize pole pattern manager
+  polePatternManager = new PolePatternManager(leds, NUM_LEDS, poleLeds, POLE_NUM_LEDS);
+  polePatternManager->initialize();
+
+  // Set default palette for pole patterns
+  ColorPalette *defaultPalette = patternManager->getPaletteManager().getPalette(selectedPolePaletteIndex);
+  if (defaultPalette)
+  {
+    polePatternManager->setPalette(defaultPalette);
+  }
 
   // Initialize eye renderer for pointer mode
   eyeRenderer = new EyeRenderer(leds, &segmentManager);
@@ -401,6 +416,11 @@ void LEDDriver::processInteractionMode()
   case INTERACTION_SUBMODE_JOLT:
     // Jolt Mode - magnitude-based rainbow expansion
     processJoltMode();
+    break;
+
+  case INTERACTION_SUBMODE_SPEED_CTRL:
+    // Speed Control Mode - adjust global speed with joystick
+    processSpeedControlMode();
     break;
 
   default:
@@ -2041,99 +2061,38 @@ uint8_t LEDDriver::getPoleHeight(uint16_t index)
 
 void LEDDriver::updatePole()
 {
-  static PoleColumnWavePattern *poleColumnWave = nullptr;
-  static PoleSpiralChasePattern *poleSpiralChase = nullptr;
-  static PoleHelixPattern *poleHelix = nullptr;
-  static PoleFirePattern *poleFire = nullptr;
-  static PoleBouncePattern *poleBounce = nullptr;
+  if (!polePatternManager)
+  {
+    return;
+  }
 
   unsigned long currentTime = millis();
 
-  // Initialize pole patterns on first run
-  if (poleColumnWave == nullptr)
-  {
-    poleColumnWave = new PoleColumnWavePattern(leds, NUM_LEDS, poleLeds, POLE_NUM_LEDS);
-    poleSpiralChase = new PoleSpiralChasePattern(leds, NUM_LEDS, poleLeds, POLE_NUM_LEDS);
-    poleHelix = new PoleHelixPattern(leds, NUM_LEDS, poleLeds, POLE_NUM_LEDS);
-    poleFire = new PoleFirePattern(leds, NUM_LEDS, poleLeds, POLE_NUM_LEDS);
-    poleBounce = new PoleBouncePattern(leds, NUM_LEDS, poleLeds, POLE_NUM_LEDS);
-
-    // Set default palette for all pole patterns (get from pattern manager)
-    if (patternManager)
-    {
-      ColorPalette *defaultPalette = patternManager->getPaletteManager().getPalette(selectedPolePaletteIndex);
-      poleColumnWave->setPalette(defaultPalette);
-      poleSpiralChase->setPalette(defaultPalette);
-      poleHelix->setPalette(defaultPalette);
-      poleFire->setPalette(defaultPalette);
-      poleBounce->setPalette(defaultPalette);
-    }
-
-    // Set initial pattern properties - start with spiral chase (index 1)
-    poleSpiralChase->setActive(true);
-    poleSpiralChase->setBrightness(poleBrightness);
-    poleSpiralChase->setSpeed(poleSpeed);
-  }
-
-  // Always deactivate all patterns first
-  poleColumnWave->setActive(false);
-  poleSpiralChase->setActive(false);
-  poleHelix->setActive(false);
-  poleFire->setActive(false);
-  poleBounce->setActive(false);
-
-  // Update palette for all patterns if changed
+  // Update palette if changed
   static int lastPolePaletteIndex = -1;
   if (patternManager && selectedPolePaletteIndex != lastPolePaletteIndex)
   {
     ColorPalette *currentPalette = patternManager->getPaletteManager().getPalette(selectedPolePaletteIndex);
     if (currentPalette)
     {
-      poleColumnWave->setPalette(currentPalette);
-      poleSpiralChase->setPalette(currentPalette);
-      poleHelix->setPalette(currentPalette);
-      poleFire->setPalette(currentPalette);
-      poleBounce->setPalette(currentPalette);
+      polePatternManager->setPalette(currentPalette);
       lastPolePaletteIndex = selectedPolePaletteIndex;
     }
   }
 
-  // Update only the selected pattern
-  uint8_t patternIndex = selectedPolePatternIndex % 5; // 5 patterns available
-  bool updated = false;
-
-  switch (patternIndex)
+  // Set current pattern
+  int patternCount = polePatternManager->getPatternCount();
+  if (patternCount > 0)
   {
-  case 0:
-    poleColumnWave->setActive(true);
-    poleColumnWave->setBrightness(poleBrightness);
-    poleColumnWave->setSpeed(poleSpeed);
-    updated = poleColumnWave->update(currentTime);
-    break;
-  case 1:
-    poleSpiralChase->setActive(true);
-    poleSpiralChase->setBrightness(poleBrightness);
-    poleSpiralChase->setSpeed(poleSpeed);
-    updated = poleSpiralChase->update(currentTime);
-    break;
-  case 2:
-    poleHelix->setActive(true);
-    poleHelix->setBrightness(poleBrightness);
-    poleHelix->setSpeed(poleSpeed);
-    updated = poleHelix->update(currentTime);
-    break;
-  case 3:
-    poleFire->setActive(true);
-    poleFire->setBrightness(poleBrightness);
-    poleFire->setSpeed(poleSpeed);
-    updated = poleFire->update(currentTime);
-    break;
-  case 4:
-    poleBounce->setActive(true);
-    poleBounce->setBrightness(poleBrightness);
-    poleBounce->setSpeed(poleSpeed);
-    updated = poleBounce->update(currentTime);
-    break;
+    uint8_t patternIndex = selectedPolePatternIndex % patternCount;
+    polePatternManager->setCurrentPattern(patternIndex);
+
+    // Update brightness and speed
+    polePatternManager->setBrightness(poleBrightness);
+    polePatternManager->setSpeed(poleSpeed);
+
+    // Update pattern
+    polePatternManager->update(currentTime);
   }
 }
 
@@ -2365,6 +2324,8 @@ String LEDDriver::getCurrentSubModeDescription() const
       return "Firework Launch";
     case INTERACTION_SUBMODE_JOLT:
       return "Jolt Magnitude";
+    case INTERACTION_SUBMODE_SPEED_CTRL:
+      return "Speed Control";
     default:
       return "Unknown Interaction Sub-Mode";
     }
@@ -2378,11 +2339,19 @@ String LEDDriver::getCurrentSubModeDescription() const
 
 void LEDDriver::setPolePatternIndex(int patternIndex)
 {
-  selectedPolePatternIndex = patternIndex % 5; // Ensure valid range (5 patterns now)
+  if (!polePatternManager)
+  {
+    return;
+  }
 
-  const char *patternNames[] = {"Column Wave", "Spiral Chase", "Helix", "Fire", "Bounce"};
-  Serial.print("Pole pattern set to: ");
-  Serial.println(patternNames[selectedPolePatternIndex]);
+  int patternCount = polePatternManager->getPatternCount();
+  if (patternCount > 0)
+  {
+    selectedPolePatternIndex = patternIndex % patternCount;
+
+    Serial.print("Pole pattern set to: ");
+    Serial.println(polePatternManager->getPatternName(selectedPolePatternIndex));
+  }
 }
 
 void LEDDriver::updatePolePatternSelection()
@@ -2435,23 +2404,27 @@ void LEDDriver::processPolePatternExplorer()
     {
       if (deltaX > 0 && lastDeltaX <= JOYSTICK_DEADZONE) // Right
       {
-        selectedPolePatternIndex = (selectedPolePatternIndex + 1) % 5;
-        lastPatternChange = currentTime;
+        if (polePatternManager)
+        {
+          int patternCount = polePatternManager->getPatternCount();
+          selectedPolePatternIndex = (selectedPolePatternIndex + 1) % patternCount;
+          lastPatternChange = currentTime;
 
-        // Print pattern name
-        const char *patternNames[] = {"Column Wave", "Spiral Chase", "Helix", "Fire", "Bounce"};
-        Serial.print("Pole Pattern: ");
-        Serial.println(patternNames[selectedPolePatternIndex]);
+          Serial.print("Pole Pattern: ");
+          Serial.println(polePatternManager->getPatternName(selectedPolePatternIndex));
+        }
       }
       else if (deltaX < 0 && lastDeltaX >= -JOYSTICK_DEADZONE) // Left
       {
-        selectedPolePatternIndex = (selectedPolePatternIndex + 4) % 5; // +4 is same as -1 with wrap
-        lastPatternChange = currentTime;
+        if (polePatternManager)
+        {
+          int patternCount = polePatternManager->getPatternCount();
+          selectedPolePatternIndex = (selectedPolePatternIndex + patternCount - 1) % patternCount;
+          lastPatternChange = currentTime;
 
-        // Print pattern name
-        const char *patternNames[] = {"Column Wave", "Spiral Chase", "Helix", "Fire", "Bounce"};
-        Serial.print("Pole Pattern: ");
-        Serial.println(patternNames[selectedPolePatternIndex]);
+          Serial.print("Pole Pattern: ");
+          Serial.println(polePatternManager->getPatternName(selectedPolePatternIndex));
+        }
       }
     }
 
@@ -2598,8 +2571,80 @@ void LEDDriver::processPoleSettings()
 
 void LEDDriver::processEyeballMode()
 {
-  // Same as the old eye mode
-  processEyeModeOld(); // Reuse existing implementation
+  // Eye Mode: Always show eyeball + red directional line on clock
+  // - Pole pattern continues playing
+  // - Clock shows red line pointing in joystick direction
+  // - Line width based on joystick magnitude
+  // - Eye always rendered (center iris in deadzone)
+
+  unsigned long currentTime = millis();
+
+  // Update pole pattern (continues playing)
+  updatePole();
+
+  // Clear clock segment only (preserve pole LEDs)
+  segmentManager.fillSegment(leds, SEGMENT_CLOCK, CRGB::Black);
+
+  // Clear eye segments
+  for (int i = 0; i < 5; i++)
+  {
+    segmentManager.fillSegment(leds, i + SEGMENT_EYE_4, CRGB::Black);
+  }
+
+  // Calculate joystick deltas
+  int deltaX = joystickState.x - JOYSTICK_CENTER;
+  int deltaY = joystickState.y - JOYSTICK_CENTER;
+
+  // Check if joystick is active (outside deadzone)
+  bool joystickActive = (abs(deltaX) > JOYSTICK_DEADZONE || abs(deltaY) > JOYSTICK_DEADZONE);
+
+  if (joystickActive)
+  {
+    // Calculate angle from joystick position (in degrees, 0 = 12 o'clock)
+    float angleRadians = atan2(deltaX, deltaY);
+    float angleDegrees = angleRadians * 180.0f / PI;
+    if (angleDegrees < 0)
+      angleDegrees += 360.0f;
+
+    // Calculate magnitude (distance from center)
+    int magnitude = sqrt(deltaX * deltaX + deltaY * deltaY);
+    int maxMagnitude = JOYSTICK_MAX - JOYSTICK_CENTER;
+
+    // Map magnitude to line width (1-20 LEDs)
+    int lineWidth = map(constrain(magnitude, JOYSTICK_DEADZONE, maxMagnitude),
+                        JOYSTICK_DEADZONE, maxMagnitude, 1, 20);
+
+    // Draw red line on clock in the direction of joystick
+    // Use SegmentManager to get LEDs at the specified angle
+    uint16_t rawIndices[20]; // Max width is 20
+    uint8_t count = segmentManager.getRawLEDsAtAngle(SEGMENT_CLOCK, angleDegrees,
+                                                     lineWidth, rawIndices, 20);
+
+    // Light up the LEDs in red
+    for (uint8_t i = 0; i < count; i++)
+    {
+      leds[rawIndices[i]] = CRGB::Red;
+      leds[rawIndices[i]].nscale8(globalBrightness);
+    }
+
+    // Update eye position based on joystick
+    if (eyeRenderer)
+    {
+      eyeRenderer->updateEyePosition(joystickState.x, joystickState.y);
+      eyeRenderer->renderEye();
+    }
+  }
+  else
+  {
+    // Deadzone: Render center iris position only
+    if (eyeRenderer)
+    {
+      eyeRenderer->updateEyePosition(JOYSTICK_CENTER, JOYSTICK_CENTER);
+      eyeRenderer->renderEye();
+    }
+  }
+
+  show();
 }
 
 void LEDDriver::processJoltMode()
@@ -2655,6 +2700,149 @@ void LEDDriver::processJoltMode()
 
   // Render jolt effect based on magnitude
   renderJoltEffect(magnitude);
+
+  show();
+}
+
+void LEDDriver::processSpeedControlMode()
+{
+  // Speed Control Mode: Display current pattern and adjust speed with joystick
+
+  // Display the current pattern with current settings
+  if (patternManager)
+  {
+    // Update pattern with current global settings
+    Pattern *currentPattern = patternManager->getCurrentPattern();
+    if (currentPattern)
+    {
+      currentPattern->setSpeed(globalSpeed);
+      currentPattern->setBrightness(globalBrightness);
+      patternManager->update(millis());
+    }
+  }
+
+  // Handle vertical joystick for speed adjustment and palette switching
+  int deltaY = joystickState.y - JOYSTICK_CENTER;
+
+  // Handle horizontal joystick for pattern switching
+  int deltaX = joystickState.x - JOYSTICK_CENTER;
+
+  // Static variables for smooth adjustments
+  static unsigned long lastSpeedChange = 0;
+  static unsigned long lastPatternChange = 0;
+  static unsigned long lastPaletteChange = 0;
+  static const unsigned long SPEED_CHANGE_DELAY = 100;   // Update speed every 100ms
+  static const unsigned long PATTERN_CHANGE_DELAY = 300; // Prevent rapid pattern switching
+  static const unsigned long PALETTE_CHANGE_DELAY = 300; // Prevent rapid palette switching
+  static int lastDeltaX = 0;
+  static int lastDeltaY = 0;
+  unsigned long currentTime = millis();
+
+  bool canChangeSpeed = (currentTime - lastSpeedChange) > SPEED_CHANGE_DELAY;
+  bool canChangePattern = (currentTime - lastPatternChange) > PATTERN_CHANGE_DELAY;
+  bool canChangePalette = (currentTime - lastPaletteChange) > PALETTE_CHANGE_DELAY;
+
+  // Speed adjustment (vertical up)
+  if (canChangeSpeed)
+  {
+    // Map joystick Y to speed range
+    // Up (positive deltaY): SPEED_CONTROL_MIN_SPEED to SPEED_CONTROL_MAX_SPEED
+    // Deadzone: SPEED_CONTROL_DEADZONE_SPEED
+    // Down is used for palette switching
+
+    if (abs(deltaY) < JOYSTICK_DEADZONE)
+    {
+      // Deadzone: Set speed to configured deadzone speed
+      globalSpeed = SPEED_CONTROL_DEADZONE_SPEED;
+      poleSpeed = SPEED_CONTROL_DEADZONE_SPEED;
+    }
+    else if (deltaY > 0)
+    {
+      // Moving up: Map to MIN_SPEED - MAX_SPEED
+      // Use constrain to ensure we stay within joystick bounds
+      int clampedDelta = constrain(deltaY, JOYSTICK_DEADZONE, JOYSTICK_MAX - JOYSTICK_CENTER);
+
+      // Map to integer range (e.g., 100-1000 for 1.0-10.0) then convert to float
+      int minSpeedInt = (int)(SPEED_CONTROL_MIN_SPEED * 100);
+      int maxSpeedInt = (int)(SPEED_CONTROL_MAX_SPEED * 100);
+      globalSpeed = map(clampedDelta, JOYSTICK_DEADZONE, JOYSTICK_MAX - JOYSTICK_CENTER, minSpeedInt, maxSpeedInt) / 100.0f;
+      poleSpeed = globalSpeed; // Sync pole speed
+    }
+    else // deltaY < 0 - handled by palette switching below
+    {
+      // Moving down: Set to deadzone speed (palette switching happens separately)
+      globalSpeed = SPEED_CONTROL_DEADZONE_SPEED;
+      poleSpeed = SPEED_CONTROL_DEADZONE_SPEED;
+    }
+
+    // Constrain final speeds to configured bounds
+    globalSpeed = constrain(globalSpeed, SPEED_CONTROL_MIN_SPEED, SPEED_CONTROL_MAX_SPEED);
+    poleSpeed = constrain(poleSpeed, SPEED_CONTROL_MIN_SPEED, SPEED_CONTROL_MAX_SPEED);
+
+    lastSpeedChange = currentTime;
+
+    // Optional: Print speed for debugging
+    static float lastPrintedSpeed = -1.0f;
+    if (abs(globalSpeed - lastPrintedSpeed) > 0.05f) // Only print if changed significantly
+    {
+      Serial.print("Speed: ");
+      Serial.println(globalSpeed);
+      lastPrintedSpeed = globalSpeed;
+    }
+  }
+
+  // Pattern switching (horizontal left/right)
+  if (canChangePattern && patternManager)
+  {
+    // Detect edge-triggered movement (joystick just crossed deadzone)
+    if (abs(deltaX) > JOYSTICK_DEADZONE)
+    {
+      if (deltaX > 0 && lastDeltaX <= JOYSTICK_DEADZONE) // Right - next pattern
+      {
+        selectedPatternIndex = (selectedPatternIndex + 1) % patternManager->getPatternCount();
+        patternManager->setCurrentPattern(selectedPatternIndex, false);
+        lastPatternChange = currentTime;
+
+        Serial.print("Pattern: ");
+        Serial.println(patternManager->getCurrentPattern()->getName());
+      }
+      else if (deltaX < 0 && lastDeltaX >= -JOYSTICK_DEADZONE) // Left - previous pattern
+      {
+        selectedPatternIndex = (selectedPatternIndex + patternManager->getPatternCount() - 1) % patternManager->getPatternCount();
+        patternManager->setCurrentPattern(selectedPatternIndex, false);
+        lastPatternChange = currentTime;
+
+        Serial.print("Pattern: ");
+        Serial.println(patternManager->getCurrentPattern()->getName());
+      }
+    }
+
+    lastDeltaX = deltaX;
+  }
+
+  // Palette switching (vertical down)
+  if (canChangePalette && patternManager)
+  {
+    PaletteManager &palManager = patternManager->getPaletteManager();
+
+    // Detect edge-triggered downward movement
+    if (deltaY < -JOYSTICK_DEADZONE && lastDeltaY >= -JOYSTICK_DEADZONE)
+    {
+      selectedPaletteIndex = (selectedPaletteIndex + 1) % palManager.getPaletteCount();
+      selectedPolePaletteIndex = selectedPaletteIndex; // Sync pole palette
+
+      // Apply palette to clock/eye patterns
+      patternManager->setCurrentPalette(selectedPaletteIndex);
+
+      lastPaletteChange = currentTime;
+
+      ColorPalette *palette = palManager.getPalette(selectedPaletteIndex);
+      Serial.print("Palette: ");
+      Serial.println(palette ? palette->getName() : "Unknown");
+    }
+
+    lastDeltaY = deltaY;
+  }
 
   show();
 }

@@ -214,7 +214,7 @@ bool WLEDMeteorPattern::update(unsigned long currentTime)
 WLEDGlitterPattern::WLEDGlitterPattern(CRGB *leds, int numLeds)
     : Pattern(leds, numLeds, 20), glitterDensity(80), glitterBrightness(255)
 {
-  speedNormalizationFactor = 4.0f; // Glitter speed affects fade rate
+  speedNormalizationFactor = 0.5f; // Glitter speed affects fade rate
 }
 
 bool WLEDGlitterPattern::update(unsigned long currentTime)
@@ -261,7 +261,7 @@ WLEDTwoDotsPattern::WLEDTwoDotsPattern(CRGB *leds, int numLeds)
       dot1Speed(1.0f), dot2Speed(1.2f), dot1Direction(true), dot2Direction(false),
       fadeRate(64)
 {
-  speedNormalizationFactor = 7.0f; // Two Dots needs higher speed
+  speedNormalizationFactor = 1.0f; // Two Dots needs higher speed
 }
 
 bool WLEDTwoDotsPattern::update(unsigned long currentTime)

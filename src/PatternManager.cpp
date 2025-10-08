@@ -37,8 +37,8 @@ void PatternManager::initialize()
   paletteManager.initialize();
 
   // Create and add default patterns
-  addPattern(new SolidPattern(leds, numLeds, CRGB::White));
-  addPattern(new RainbowPattern(leds, numLeds));
+  // addPattern(new SolidPattern(leds, numLeds, CRGB::White)); // REMOVED
+  // addPattern(new RainbowPattern(leds, numLeds));
   addPattern(new ChasePattern(leds, numLeds, CRGB::Red, 15));
   // addPattern(new PulsePattern(leds, numLeds, CRGB::Blue));
   addPattern(new TwinklePattern(leds, numLeds, 20));
@@ -50,19 +50,20 @@ void PatternManager::initialize()
     addPattern(new MultiRingPattern(leds, numLeds, segmentManager, 3));
     // addPattern(new SpiralPattern(leds, numLeds, segmentManager, 2));
     addPattern(new RipplePattern(leds, numLeds, segmentManager, 1000));
+    addPattern(new MirroredBounceChasePattern(leds, numLeds, segmentManager, 5));
     // addPattern(new EyeBreathingPattern(leds, numLeds, segmentManager));
     // addPattern(new SegmentTestPattern(leds, numLeds, segmentManager, SEGMENT_TEST_INTERVAL));
   }
 
   // Add WLED patterns
-  addPattern(new WLEDDancingShadowsPattern(leds, numLeds));
-  addPattern(new WLEDColorWavesPattern(leds, numLeds));
-  addPattern(new WLEDNoisePattern(leds, numLeds));
-  addPattern(new WLEDMeteorPattern(leds, numLeds));
-  addPattern(new WLEDGlitterPattern(leds, numLeds));
-  addPattern(new WLEDTwoDotsPattern(leds, numLeds));
-  addPattern(new WLEDColortwinklesPattern(leds, numLeds));
-  addPattern(new WLEDFlowPattern(leds, numLeds));
+  // addPattern(new WLEDDancingShadowsPattern(leds, numLeds));
+  // addPattern(new WLEDColorWavesPattern(leds, numLeds)); // REMOVED
+  // addPattern(new WLEDNoisePattern(leds, numLeds)); // REMOVED
+  // addPattern(new WLEDMeteorPattern(leds, numLeds)); // REMOVED
+  // addPattern(new WLEDGlitterPattern(leds, numLeds));
+  // addPattern(new WLEDTwoDotsPattern(leds, numLeds)); // REMOVED
+  // addPattern(new WLEDColortwinklesPattern(leds, numLeds)); // REMOVED
+  // addPattern(new WLEDFlowPattern(leds, numLeds));
 
   // Set initial palette for all patterns
   ColorPalette *defaultPalette = paletteManager.getCurrentPalette();

@@ -317,6 +317,53 @@ public:
 };
 
 /**
+ * @brief Mirrored Bounce Chase pattern - synchronized chase on clock/EYE_4/EYE_2 with left/right mirroring
+ */
+class MirroredBounceChasePattern : public Pattern
+{
+private:
+  SegmentManager *segmentManager; // Segment manager for angle calculations
+  float position;                 // Current position (0.0-180.0 degrees, represents one side)
+  float bounceSpeed;              // Speed of position change (degrees per update)
+  bool movingUp;                  // Direction: true = moving towards 0°, false = moving towards 180°
+  uint8_t trailLength;            // Number of LEDs in chase trail
+  CRGB chaseColor;                // Color of the chase object
+
+public:
+  /**
+   * @brief Constructor for MirroredBounceChasePattern
+   * @param leds Pointer to LED array
+   * @param numLeds Number of LEDs
+   * @param segManager Pointer to SegmentManager
+   * @param trailLength Length of chase trail
+   */
+  MirroredBounceChasePattern(CRGB *leds, int numLeds, SegmentManager *segManager, uint8_t trailLength = 5);
+
+  bool update(unsigned long currentTime) override;
+
+  /**
+   * @brief Set bounce speed (degrees per update)
+   * @param speed Bounce speed
+   */
+  void setBounceSpeed(float speed) { this->bounceSpeed = speed; }
+
+  /**
+   * @brief Set trail length
+   * @param length Trail length in LEDs
+   */
+  void setTrailLength(uint8_t length) { this->trailLength = length; }
+
+  /**
+   * @brief Set chase color
+   * @param color Chase color
+   */
+  void setChaseColor(CRGB color) { this->chaseColor = color; }
+
+  String getName() const override { return "Mirrored Bounce"; }
+  String getDescription() const override { return "Mirrored chase bouncing up/down on clock and eye rings"; }
+};
+
+/**
  * @brief Pulse pattern - breathing effect
  */
 class PulsePattern : public Pattern
@@ -600,15 +647,19 @@ public:
 class PoleHelixPattern : public PolePattern
 {
 private:
-  uint16_t helixPhase; // Current helix phase (fixed-point: 0-65535 = 0-2π)
-  uint8_t numHelixes;  // Number of parallel helixes
-  uint16_t helixSpeed; // Speed of helix rotation (fixed-point)
+  uint16_t helixPhase;    // Current helix phase (fixed-point: 0-65535 = 0-2π)
+  uint8_t numHelixes;     // Number of parallel helixes (4 columns)
+  uint16_t helixSpeed;    // Speed of helix rotation (fixed-point)
+  float verticalPosition; // Vertical position (0.0 = bottom, 1.0 = top)
+  float verticalSpeed;    // Speed of vertical movement
+  bool movingUp;          // Direction of movement
+  uint8_t helixHeight;    // Height of helix block (3 rows)
 
 public:
   PoleHelixPattern(CRGB *leds, int numLeds, CRGB *poleLeds, int poleNumLeds);
   bool update(unsigned long currentTime) override;
   String getName() const override { return "PoleHelix"; }
-  String getDescription() const override { return "Multiple helical waves around pole (Optimized)"; }
+  String getDescription() const override { return "Bouncing helix block (3 rows x 4 columns)"; }
 };
 
 /**
